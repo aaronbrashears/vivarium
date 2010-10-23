@@ -53,10 +53,10 @@ class Role(Entity):
             actions = value['actions']
             depends = value.get('depends', None)
             env = _merge_dicts(value.get('env', {}), overrides)
-            print(targetname)
-            print("  actions: {0}".format(actions))
-            print("  depends: {0}".format(depends))
-            print("      env: {0}".format(env))
+            #print(targetname)
+            #print("  actions: {0}".format(actions))
+            #print("  depends: {0}".format(depends))
+            #print("      env: {0}".format(env))
             result[targetname] = Target(actions, depends, env)
         return result
 
@@ -88,7 +88,16 @@ class Host(Entity):
             self._load_roles(source)
         return self
 
-    def to_spawn(self):
+    def seed(self):
+        packages, targets = self._find_targets()
+        stages = self._build_stages(targets)
+        for stage in stages:
+            for step in stage:
+                print("Collecting resources for {0}".format(step.keys()[0]))
+                #step.values()[0].seed()
+        # *TODO: iterate over stages and collect resources.
+
+    def _find_targets(self):
         packages = {}
         targets = {}
         targetrole = {}
@@ -105,9 +114,24 @@ class Host(Entity):
                             targetrole[key])
             targets.update(new_targets)
             targetrole.update(dict([(key, rolename) for key in new_targets]))
-        # *TODO: iterate over the targets and fill in the templates.
-        print("Packages {0}".format(packages))
-        print("Targets {0}".format(targets))
+        return packages, targets
+
+    def _build_stages(self, targets):
+        # iterate over the targets and let them prep themselves for the spawn
+        deps = {}
+        for targetname, target in targets.iteritems():
+            #print("{0} {1}".format(targetname, target.depends))
+            deps[targetname] = set(target.depends) if target.depends else set()
+        stages = []
+        #print(deps)
+        for targetnames in _topological_sort(deps):
+            stage = []
+            for targetname in targetnames:
+                stage.append({targetname : targets[targetname]})
+            stages.append(stage)
+        # import pprint
+        # pprint.pprint(stages)
+        return stages
 
     def _load_roles(self, source):
         roles = self._config.get('roles', [])
@@ -119,9 +143,9 @@ class Host(Entity):
 
 class Target(object):
     def __init__(self, actions, depends, env):
-        self._actions = actions
-        self._depends = depends
-        self._env = env
+        self.actions = actions
+        self.depends = depends
+        self.env = env
 
 def copy(source, destination):
     raise NotImplementedError
@@ -129,7 +153,7 @@ def copy(source, destination):
 def configure(hostname, source, dest_dir):
     host = Host(name=hostname)
     host.from_source(source)
-    spawn = host.to_spawn()
+    spawn = host.seed()
     print(host)
 
 def _is_dict_like(obj, require_set=False):
