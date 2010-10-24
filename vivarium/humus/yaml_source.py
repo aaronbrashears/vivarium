@@ -23,6 +23,10 @@ class Humus(object):
         return self._config.open(
             self._filename('/includes/', name, "Include"))
 
+    def open_template(self, name):
+        return self._config.open(
+            self._filename('/templates/', name, "Template"))
+
     def _filename(self, prefix, path, debug_txt=None):
         filename = prefix + path
         filename = filename.replace('//', '/')

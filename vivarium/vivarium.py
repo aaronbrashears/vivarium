@@ -1,4 +1,6 @@
 from copy import deepcopy
+import os.path
+import sys
 import yaml
 
 class IncludeLoopError(Exception):
@@ -88,14 +90,12 @@ class Host(Entity):
             self._load_roles(source)
         return self
 
-    def seed(self):
+    def seed(self, source):
         packages, targets = self._find_targets()
         stages = self._build_stages(targets)
         for stage in stages:
             for step in stage:
-                print("Collecting resources for {0}".format(step.keys()[0]))
-                #step.values()[0].seed()
-        # *TODO: iterate over stages and collect resources.
+                step.gather_resources(source)
 
     def _find_targets(self):
         packages = {}
@@ -127,7 +127,8 @@ class Host(Entity):
         for targetnames in _topological_sort(deps):
             stage = []
             for targetname in targetnames:
-                stage.append({targetname : targets[targetname]})
+                step = NamedTarget(targetname, targets[targetname])
+                stage.append(step)
             stages.append(stage)
         # import pprint
         # pprint.pprint(stages)
@@ -147,13 +148,29 @@ class Target(object):
         self.depends = depends
         self.env = env
 
+class NamedTarget(object):
+    def __init__(self, name, target, action_data = None):
+        self.name = name
+        self.target = target
+        self._action_data = action_data
+
+    def gather_resources(self, source):
+        print("Gathering resources for {0}".format(self.name))
+        self._action_data = []
+        manager = ActionManager()
+        for action_name in self.target.actions:
+            action_impl = manager.action(action_name)
+            self._action_data.append(action_impl.seed(source, self.target.env))
+        import pprint
+        pprint.pprint(self._action_data)
+
 def copy(source, destination):
     raise NotImplementedError
 
 def configure(hostname, source, dest_dir):
     host = Host(name=hostname)
     host.from_source(source)
-    spawn = host.seed()
+    spawn = host.seed(source)
     print(host)
 
 def _is_dict_like(obj, require_set=False):
@@ -220,3 +237,27 @@ def _topological_sort(deps):
                      if item not in ordered])
     if deps:
         raise CircularDependencyError, deps
+
+class ActionManager(object):
+    __shared_state = {}
+    def __init__(self):
+        self.__dict__ = ActionManager.__shared_state
+        if not hasattr(self, '_initialized'):
+            self._find_actions()
+            self._initialized = True
+
+    def _find_actions(self):
+        self._actions = {}
+        my_dir = (os.path.dirname(os.path.realpath(__file__)))
+        plugin_dir = os.path.join(my_dir, 'actions')
+        plugin_files = [x[:-3] for x in os.listdir(plugin_dir) \
+                            if x.endswith(".py")]
+        sys.path.insert(0, plugin_dir)
+        for plugin in plugin_files:
+            mod = __import__(plugin)
+            if hasattr(mod, 'register'):
+                mod.register(self._actions)
+        sys.path.pop(0)
+
+    def action(self, name):
+        return self._actions[name]()
