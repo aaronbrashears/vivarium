@@ -90,7 +90,7 @@ class Host(Entity):
             self._load_roles(source)
         return self
 
-    def seed(self, source):
+    def seed(self, source, spawn):
         packages, targets = self._find_targets()
         stages = self._build_stages(targets)
         for stage in stages:
@@ -167,10 +167,10 @@ class NamedTarget(object):
 def copy(source, destination):
     raise NotImplementedError
 
-def configure(hostname, source, dest_dir):
+def seed(hostname, source, spawn):
     host = Host(name=hostname)
     host.from_source(source)
-    spawn = host.seed(source)
+    spawn = host.seed(source, spawn)
     print(host)
 
 def _is_dict_like(obj, require_set=False):

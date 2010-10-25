@@ -7,54 +7,63 @@ import sys
 import vivarium.humus.yaml_source as yaml_source
 import vivarium.vivarium as vivarium
 
-def _configure_parser(subparsers):
-    configure_parser = subparsers.add_parser(
-        'configure', 
-        help='Configure a host.')
-    dest_group = configure_parser.add_mutually_exclusive_group()
+def _seed_parser(subparsers):
+    seed_parser = subparsers.add_parser(
+        'seed',
+        help="""
+Given a hostname in the form 'my.example.com', gather all roles,
+environments, packages, templates, and files to generate the seed
+for the spawn.""")
+    dest_group = seed_parser.add_mutually_exclusive_group()
+    # dest_group.add_argument(
+    #     '-d', '--dest-dir',
+    #     action='store',
+    #     default='/',
+    #     help='Destination directory for configuration. Default is "/".')
+    seed_parser.add_argument(
+        'host',
+        action='store',
+        help='Host to generate the seed.')
+    seed_parser.add_argument(
+        'spawn',
+        action='store',
+        help='Spawn and source to use. Can be yaml file or a directory.')
+    seed_parser.add_argument(
+        '--source', '-s',
+        action='store',
+        default=None,
+        help='The source spawn to use if different from the spawn.')
     dest_group.add_argument(
-        '-d', '--dest-dir', 
-        action='store', 
-        default='/',
-        help='Destination directory for configuration. Default is "/".')
-    dest_group.add_argument(
-        '--stdout', 
-        action='store_true', 
+        '--stdout',
+        action='store_true',
         default=False,
         help='Emit configuration to stdout. NOT YET IMPLEMENTED.')
-    configure_parser.add_argument(
-        'source', 
-        action='store', 
-        help='Source configuration to use. Can be yaml file or a directory.')
-    configure_parser.add_argument(
-        'host', 
-        action='store',
-        help='The host to configure.')
-    configure_parser.set_defaults(func=_configure)
+    seed_parser.set_defaults(func=_seed)
     return subparsers
 
-def _configure(args):
-    source = _find_humus(args.source)
+def _seed(args):
+    spawn = _find_humus(args.spawn)
+    if args.source is None: source = spawn
+    else: source = _find_humus(args.source)
+    #dest_dir = args.dest_dir
     if args.stdout:
         raise NotImplementedError, 'Not able to emit to stdout yet.'
-    else:
-        dest_dir = args.dest_dir
-    vivarium.configure(args.host, source, dest_dir)
+    vivarium.seed(args.host, source, spawn)
 
 def _copy_parser(subparsers):
     copy_parser = subparsers.add_parser(
-        'copy', help='Copy ')
+        'copy', help='Copy a complete humus. NOT YET IMPLEMENTED.')
     copy_parser.add_argument(
-        'source', 
-        action='store', 
+        'from',
+        action='store',
         help='Source configuration to use. Can be yaml file or a directory.')
     copy_parser.add_argument(
-        'destination', 
-        action='store', 
-        help='''
-Destination for the configuration. If the destination is a directory then the
-configuration will use the file system back-end. If the destination is a file
-or ends in .yaml, the yaml back-end will be used.''')
+        'to',
+        action='store',
+        help="""
+Destination for the copy. If the destination is a directory then the
+configuration will use the file system back-end. If the destination is
+a file or ends in .yaml, the yaml back-end will be used.""")
     copy_parser.set_defaults(func=_copy)
 
 def _copy(args):
@@ -72,17 +81,23 @@ def _find_humus(name):
         sys.exit(1)
 
 def main():
-    description = '''
+    description = """
 Vivarium is a tool for managing small to medium distributed system
 configuration. Vivarium is designed to be backed by zookeeper to store data though 
-you can also use yaml or just a normal file system.'''
+you can also use yaml or just a normal file system."""
     parser = argparse.ArgumentParser(description=description, epilog=None)
     parser.add_argument(
         '-v', '--version', 
         action='version', 
         version='%(prog)s 0.1')
-    subparsers = parser.add_subparsers(help='commands')
-    subparsers = _configure_parser(subparsers)
+    subparsers = parser.add_subparsers(
+        title='Commands',
+        description="""
+To get usage for a particular command:
+
+  %(prog)s {command} --help""",
+        help='commands')
+    subparsers = _seed_parser(subparsers)
     subparsers = _copy_parser(subparsers)
     args = parser.parse_args()
     args.func(args)
