@@ -29,7 +29,8 @@ class Entity(object):
             if include in seen: raise IncludeLoopError, seen
             seen.add(include)
             entity = Entity(name=include)
-            entity._load_config(source, source.open_include(include))
+            with source.open(source.path_to_include(include)) as includefile:
+                entity._load_config(source, includefile)
             self._config = _merge_dicts(entity._config, self._config)
             seen.remove(include)
 
@@ -38,9 +39,14 @@ class Role(Entity):
         super(Role, self).__init__(*args, **kwargs)
 
     def from_source(self, source):
-        with source.open_role(self.name) as configfile:
+        with source.open(source.path_to_role(self.name)) as configfile:
             self._load_config(source, configfile)
         return self
+
+    def to_seed(self):
+        seed = {}
+        seed['config'] = self._config
+        return seed
 
     def packages(self, overrides):
         return _merge_dicts(self._config.get('packages', {}), overrides)
@@ -80,22 +86,53 @@ class Host(Entity):
             env = _merge_dicts(host_env, self.config.get('env', {}))
             return self.role.targets(env)
 
+        def to_seed(self):
+            seed = {}
+            seed['config'] = self.config
+            seed['role'] = self.role.to_seed()
+            return seed
+
     def __init__(self, *args, **kwargs):
         super(Host, self).__init__(*args, **kwargs)
         self.roles = {}
 
     def from_source(self, source):
-        with source.open_host(self.name) as configfile:
+        with source.open(source.path_to_host(self.name)) as configfile:
             self._load_config(source, configfile)
             self._load_roles(source)
         return self
 
-    def seed(self, source, spawn):
+    def gather(self, source):
         packages, targets = self._find_targets()
         stages = self._build_stages(targets)
         for stage in stages:
             for step in stage:
                 step.gather_resources(source)
+        self.packages = packages
+        self.stages = stages
+        return self
+
+    def to_seed(self):
+        # name (str), _config (dict),
+        # roles (dict => str: rolespec)
+        # packages (...)
+        # stages (...)
+        seed = {}
+        seed['name'] = self.name
+        seed['config'] = self._config
+        roles = {}
+        for name, rolespec in self.roles.iteritems():
+            roles[name] = rolespec.to_seed()
+        seed['roles'] = roles
+        seed['packages'] = self.packages
+        stages = []
+        for stage in self.stages:
+            stage_seed = []
+            for step in stage:
+                stage_seed.append(step.to_seed())
+            stages.append(stage_seed)
+        seed['stages'] = stages
+        return seed
 
     def _find_targets(self):
         packages = {}
@@ -148,11 +185,24 @@ class Target(object):
         self.depends = depends
         self.env = env
 
+    def to_seed(self):
+        seed = {}
+        seed['actions'] = self.actions
+        seed['depends'] = self.actions
+        seed['env'] = self.env
+
 class NamedTarget(object):
     def __init__(self, name, target, action_data = None):
         self.name = name
         self.target = target
         self._action_data = action_data
+
+    def to_seed(self):
+        seed = {}
+        seed['name'] = self.name
+        seed['target'] = self.target.to_seed()
+        seed['action_data'] = self._action_data
+        return seed
 
     def gather_resources(self, source):
         print("Gathering resources for {0}".format(self.name))
@@ -161,8 +211,6 @@ class NamedTarget(object):
         for action_name in self.target.actions:
             action_impl = manager.action(action_name)
             self._action_data.append(action_impl.seed(source, self.target.env))
-        import pprint
-        pprint.pprint(self._action_data)
 
 def copy(source, destination):
     raise NotImplementedError
@@ -170,8 +218,11 @@ def copy(source, destination):
 def seed(hostname, source, spawn):
     host = Host(name=hostname)
     host.from_source(source)
-    spawn = host.seed(source, spawn)
-    print(host)
+    host.gather(source)
+    with spawn.open(source.path_to_seed(hostname), 'w') as dest:
+        serialized = yaml.dump(host.to_seed())
+        #print(serialized)
+        dest.write(serialized)
 
 def _is_dict_like(obj, require_set=False):
      """

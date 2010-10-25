@@ -7,6 +7,6 @@ class Configure(object):
 
     def seed(self, source, env):
         rv = {}
-        with source.open_template(env['template']) as template:
+        with source.open(source.path_to_template(env['template'])) as template:
             rv['template'] = template.read()
         return rv
