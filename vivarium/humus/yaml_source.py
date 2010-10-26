@@ -43,7 +43,7 @@ class Humus(object):
 
 class YamlFS(object):
     class File(object):
-        def __init__(self, node, name, mode):
+        def __init__(self, node, name, mode, yamlfs):
             self._name = name
             self._node = node
             if 'r' == mode:
@@ -51,7 +51,8 @@ class YamlFS(object):
             elif 'w' == mode:
                 self._file = stringio.StringIO()
             else:
-                raise NotImplementedError, 'Please specify mod of r or w'
+                raise NotImplementedError, 'Please specify mode of r or w'
+            self._yamlfs = yamlfs
             self._is_dirty = False
             self.next = self._file.next
             self.read = self._file.read
@@ -74,18 +75,14 @@ class YamlFS(object):
             self._file.flush()
             if self._is_dirty:
                 self._node[self._name] = self._file.getvalue()
+                self._yamlfs._sync()
         def close(self):
             self.flush()
             self._file.close()
 
-    def __init__(self, source):
-        if isinstance(source, basestring):
-            if os.path.isfile(source):
-                self._fs = yaml.load(open(source))
-            else:
-                self._fs = yaml.load(source)
-        else:
-            self._fs = yaml.load(source.read())
+    def __init__(self, filename):
+        self._filename = filename
+        self._fs = yaml.load(open(self._filename))
 
     def open(self, filename, mode):
         if filename.startswith('/'):
@@ -96,8 +93,11 @@ class YamlFS(object):
         rv = self._fs
         for part in paths[:-1]:
             rv = rv[part]
-        # *NOTE: split out so we can handle new files some day.
-        return YamlFS.File(rv, paths[-1], mode)
+        # *NOTE: split out so we can handle new files.
+        return YamlFS.File(rv, paths[-1], mode, self)
+
+    def _sync(self):
+        yaml.dump(self._fs, stream=open(self._filename, 'w'))
 
     def _mkdir(self, path):
         step = self._fs
