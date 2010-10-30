@@ -1,12 +1,14 @@
 import os.path
-import humusfs.yamlfs
+
+import humusfs.yamlfs as yamlfs
+import humusfs.fsfs as fsfs
 
 class Humus(object):
     def __init__(self, location):
         if os.path.isdir(location):
-            raise NotImplementedError
+            self._base = fsfs.FSFS(location)
         elif os.path.isfile(location) or location.endswith('.yaml'):
-            self._config = humusfs.yamlfs.YamlFS(location)
+            self._base = yamlfs.YamlFS(location)
         else:
             msg = 'Unable to determine back-end from: {0}'.format(location)
             raise RuntimeError, msg
@@ -18,7 +20,7 @@ class Humus(object):
             self._setattr_path_to_host(section)
 
     def open(self, filename, mode='r'):
-        return self._config.open(filename, mode)
+        return self._base.open(filename, mode)
 
     def _setattr_path_to(self, section):
         fn_name, top = Humus._fnname_and_top(section)
