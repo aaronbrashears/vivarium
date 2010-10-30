@@ -4,7 +4,7 @@ import argparse
 import os.path
 import sys
 
-import vivarium.humus.yaml_source as yaml_source
+import vivarium.humus as humus
 import vivarium.vivarium as vivarium
 
 def _seed_parser(subparsers):
@@ -42,9 +42,9 @@ for the spawn.""")
     return subparsers
 
 def _seed(args):
-    spawn = _find_humus(args.spawn)
+    spawn = humus.Humus(args.spawn)
     if args.source is None: source = spawn
-    else: source = _find_humus(args.source)
+    else: source = humus.Humus(args.source)
     #dest_dir = args.dest_dir
     if args.stdout:
         raise NotImplementedError, 'Not able to emit to stdout yet.'
@@ -67,18 +67,9 @@ a file or ends in .yaml, the yaml back-end will be used.""")
     copy_parser.set_defaults(func=_copy)
 
 def _copy(args):
-    source = _find_humus(args.source)
-    destination = _find_humus(args.destination)
+    source = vivarium.Humus(args.source)
+    destination = vivarium.Humus(args.destination)
     vivarium.copy(source, destination)
-
-def _find_humus(name):
-    if os.path.isdir(name):
-        raise NotImplementedError
-    elif os.path.isfile(name) or name.endswith('.yaml'):
-        return yaml_source.Humus(name)
-    else:
-        print('Unable to determine back-end from: {0}'.format(name))
-        sys.exit(1)
 
 def main():
     description = """
