@@ -7,9 +7,10 @@ class FSFS(object):
 
     def open(self, filename, mode):
         fullname = self._base + filename
-        print("fullname: {0}".format(fullname))
-        if FSFS._is_write(mode):
+        if mode == 'w':
             FSFS._mkdir(os.path.dirname(fullname))
+        elif mode != 'r':
+            raise NotImplementedError, 'Please specify mode of r or w'
         return open(fullname, mode)
 
     @staticmethod
@@ -21,7 +22,6 @@ class FSFS(object):
 
     @staticmethod
     def _mkdir(path):
-        print("path: {0}".format(path))
         try:
             os.makedirs(path)
         except OSError as exc:
