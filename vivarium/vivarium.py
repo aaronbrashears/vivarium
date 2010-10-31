@@ -190,6 +190,7 @@ class Target(object):
         seed['actions'] = self.actions
         seed['depends'] = self.actions
         seed['env'] = self.env
+        return seed
 
 class NamedTarget(object):
     def __init__(self, name, target, action_data = None):
