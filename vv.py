@@ -65,6 +65,7 @@ Destination for the copy. If the destination is a directory then the
 configuration will use the file system back-end. If the destination is
 a file or ends in .yaml, the yaml back-end will be used.""")
     copy_parser.set_defaults(func=_copy)
+    return subparsers
 
 def _copy(args):
     source = vivarium.Humus(args.source)
