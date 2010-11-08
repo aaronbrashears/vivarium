@@ -1,3 +1,4 @@
+import errno
 import cStringIO as stringio
 import yaml
 
@@ -51,8 +52,11 @@ class YamlFS(object):
         if mode == 'w':
             self._mkdir(paths[:-1])
         rv = self._fs
-        for part in paths[:-1]:
-            rv = rv[part]
+        try:
+            for part in paths[:-1]:
+                rv = rv[part]
+        except KeyError:
+            raise IOError, errno.ENOENT
         # *NOTE: split out so we can handle new files.
         return YamlFS.File(rv, paths[-1], mode, self)
 

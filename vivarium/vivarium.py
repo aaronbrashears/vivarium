@@ -1,4 +1,5 @@
 from copy import deepcopy
+import errno
 import os.path
 import sys
 import yaml
@@ -14,7 +15,7 @@ class TargetCollisionError(Exception):
 
 class Entity(object):
     def __init__(self, *args, **kwargs):
-        #print("Entity init {0}".format(kwargs))
+        # print("Entity init {0}".format(kwargs))
         self.name = kwargs['name']
         self._config = None
 
@@ -25,14 +26,47 @@ class Entity(object):
     def _load_config_checked(self, source, configfile, seen):
         self._config = yaml.load(configfile.read())
         includes = self._config.get('includes', [])
+        # print("includes: {0}".format(includes))
         for include in includes:
             if include in seen: raise IncludeLoopError, seen
             seen.add(include)
             entity = Entity(name=include)
             with source.open(source.path_to_include(include)) as includefile:
                 entity._load_config(source, includefile)
+            # print("config: {0}".format(entity._config))
             self._config = _merge_dicts(entity._config, self._config)
             seen.remove(include)
+
+class File(object):
+    def __init__(self):
+        self.destination = None
+        self.owner = None
+        self.group = None
+        self.mode = None
+        self._template = None
+        # *TODO: add content as an alternate to templates
+        # self._content = None
+
+    def from_source(self, source, filename):
+        with source.open(source.path_to_file(filename)) as file_def:
+            config = yaml.load(file_def.read())
+        self.destination = config['destination']
+        self.owner = config.get('owner', 'root')
+        self.group = config.get('group', 'root')
+        self.mode = config.get('mode', 'u=rw,go=r')
+        template = config['template']
+        with source.open(source.path_to_template(template)) as contents:
+            self._template = contents.read()
+        return self
+
+    def to_seed(self):
+        seed = {}
+        seed['destination'] = self.destination
+        seed['owner'] = self.owner
+        seed['group'] = self.group
+        seed['mode'] = self.mode
+        seed['template'] = self._template
+        return seed
 
 class Role(Entity):
     def __init__(self, *args, **kwargs):
@@ -48,74 +82,57 @@ class Role(Entity):
         seed['config'] = self._config
         return seed
 
-    def packages(self, overrides):
-        return _merge_dicts(self._config.get('packages', {}), overrides)
-
-    def targets(self, overrides):
+    def targets(self, source, override_targets, override_env):
         """
         This method returns {targetname:Target} for this role
         specialization.
         """
         result = {}
-        for targetname, value in self._config['targets'].iteritems():
+        all_targets = _merge_dicts(self._config['targets'], override_targets)
+        for targetname, value in all_targets.iteritems():
             actions = value['actions']
             depends = value.get('depends', None)
-            env = _merge_dicts(value.get('env', {}), overrides)
-            #print(targetname)
-            #print("  actions: {0}".format(actions))
-            #print("  depends: {0}".format(depends))
-            #print("      env: {0}".format(env))
-            result[targetname] = Target(actions, depends, env)
+            env = _merge_dicts(value.get('env', {}), override_env)
+            target = Target().from_source(source, actions, depends, env)
+            result[targetname] = target
         return result
 
 class Host(Entity):
     class RoleSpec(object):
         def __init__(self, role_spec, general):
-            self.config = role_spec
+            self._config = role_spec
             self.role = general
 
-        def packages(self, host_packages):
-            "Return all packages."
-            packages = _merge_dicts(
-                host_packages,
-                self.config.get('packages', {}))
-            return self.role.packages(packages)
-
-        def targets(self, host_env):
+        def targets(self, source, host_env):
             "Return ``Role.targets`` with overridden env."
-            env = _merge_dicts(host_env, self.config.get('env', {}))
-            return self.role.targets(env)
+            env = _merge_dicts(host_env, self._config.get('env', {}))
+            spec_targets = self._config.get('targets', {})
+            targets = self.role.targets(source, spec_targets, env)
+            return targets
 
         def to_seed(self):
             seed = {}
-            seed['config'] = self.config
+            seed['config'] = self._config
             seed['role'] = self.role.to_seed()
             return seed
 
     def __init__(self, *args, **kwargs):
         super(Host, self).__init__(*args, **kwargs)
         self.roles = {}
+        self.stages = []
 
     def from_source(self, source):
         with source.open(source.path_to_host(self.name)) as configfile:
             self._load_config(source, configfile)
+            # import pprint
+            # pprint.pprint(self._config)
             self._load_roles(source)
-        return self
-
-    def gather(self, source):
-        packages, targets = self._find_targets()
-        stages = self._build_stages(targets)
-        for stage in stages:
-            for step in stage:
-                step.gather_resources(source)
-        self.packages = packages
-        self.stages = stages
+        self._gather(source)
         return self
 
     def to_seed(self):
         # name (str), _config (dict),
         # roles (dict => str: rolespec)
-        # packages (...)
         # stages (...)
         seed = {}
         seed['name'] = self.name
@@ -124,106 +141,157 @@ class Host(Entity):
         for name, rolespec in self.roles.iteritems():
             roles[name] = rolespec.to_seed()
         seed['roles'] = roles
-        seed['packages'] = self.packages
         stages = []
         for stage in self.stages:
-            stage_seed = []
-            for step in stage:
-                stage_seed.append(step.to_seed())
-            stages.append(stage_seed)
+            steps = {}
+            for key, value in stage.iteritems():
+                steps[key] = value.to_seed()
+            stages.append(steps)
         seed['stages'] = stages
         return seed
 
-    def _find_targets(self):
-        packages = {}
+    def _gather(self, source):
+        targets = self._find_targets(source)
+        # for key, value in targets.iteritems():
+        #     print("Target: {0} -- {1}".format(key, value.to_seed()))
+        stages = self._build_stages(targets)
+        self.stages = stages
+        return self
+
+    def _find_targets(self, source):
+        target_in = {}
         targets = {}
-        targetrole = {}
+        env = self._config.get('env', {})
+        for name, value in self._config.get('targets', {}).iteritems():
+            actions = value['actions']
+            depends = value.get('depends', None)
+            target = Target().from_source(source, actions, depends, env)
+            targets[name] = target
+            target_in[name] = self.name
         for rolename, role in self.roles.iteritems():
-            new_packages = role.packages(self._config.get('packages', {}))
-            packages = _merge_dicts(packages, new_packages)
-            new_targets = role.targets(self._config.get('env', {}))
+            new_targets = role.targets(source, env)
             for key in new_targets.iterkeys():
                 if targets.has_key(key):
                     raise TargetCollisionError, \
                         "{0} found in {1} and {2}".format(
                             key,
                             rolename,
-                            targetrole[key])
+                            target_in[key])
             targets.update(new_targets)
-            targetrole.update(dict([(key, rolename) for key in new_targets]))
-        return packages, targets
+            target_in.update(dict([(key, rolename) for key in new_targets]))
+        return targets
 
     def _build_stages(self, targets):
         # iterate over the targets and let them prep themselves for the spawn
         deps = {}
         for targetname, target in targets.iteritems():
-            #print("{0} {1}".format(targetname, target.depends))
+            # print("{0} {1}".format(targetname, target.depends))
             deps[targetname] = set(target.depends) if target.depends else set()
         stages = []
-        #print(deps)
+        # print(deps)
         for targetnames in _topological_sort(deps):
-            stage = []
+            stage = {}
             for targetname in targetnames:
-                step = NamedTarget(targetname, targets[targetname])
-                stage.append(step)
+                stage[targetname] = targets[targetname]
             stages.append(stage)
-        # import pprint
-        # pprint.pprint(stages)
         return stages
 
     def _load_roles(self, source):
         roles = self._config.get('roles', [])
         for name, spec in roles.iteritems():
+            if spec is None: spec = {}
             generic_role = Role(name=name)
             generic_role.from_source(source)
             role = Host.RoleSpec(spec, generic_role)
             self.roles[name] = role
 
-class Target(object):
-    def __init__(self, actions, depends, env):
-        self.actions = actions
-        self.depends = depends
-        self.env = env
+class Action(object):
+    def __init__(self, name, parameters, data):
+        self.action = name
+        self.parameters = parameters
+        self.data = data
 
     def to_seed(self):
         seed = {}
-        seed['actions'] = self.actions
-        seed['depends'] = self.actions
+        seed['action'] = self.action
+        seed['parameters'] = self.parameters
+        seed['data'] = self.data
+        return seed
+
+class Target(object):
+    def __init__(self):
+        self.actions = []
+        self.depends = []
+        self.env = {}
+
+    def from_source(self, source, actions, depends, env):
+        self.actions = []
+        self.depends = depends
+        self.env = env
+        manager = ActionManager()
+        for action in actions:
+            name = action['action']
+            parameters = parameters = deepcopy(action)
+            del parameters['action']
+            action_impl = manager.action(name)
+            data = action_impl.gather(source, parameters, env)
+            self.actions.append(Action(name, parameters, data))
+        return self
+
+    def to_seed(self):
+        seed = {}
+        actions = []
+        for action in self.actions:
+            actions.append(action.to_seed())
+        seed['actions'] = actions
+        seed['depends'] = self.depends
         seed['env'] = self.env
         return seed
 
-class NamedTarget(object):
-    def __init__(self, name, target, action_data = None):
-        self.name = name
-        self.target = target
-        self._action_data = action_data
+# class NamedTarget(object):
+#     def __init__(self, name, target, action_data = None):
+#         self.name = name
+#         self.target = target
+#         self._action_data = action_data
 
-    def to_seed(self):
-        seed = {}
-        seed['name'] = self.name
-        seed['target'] = self.target.to_seed()
-        seed['action_data'] = self._action_data
-        return seed
+#     def to_seed(self):
+#         seed = {}
+#         seed['name'] = self.name
+#         seed['target'] = self.target.to_seed()
+#         seed['action_data'] = self._action_data
+#         return seed
 
-    def gather_resources(self, source):
-        print("Gathering resources for {0}".format(self.name))
-        self._action_data = []
-        manager = ActionManager()
-        for action_name in self.target.actions:
-            action_impl = manager.action(action_name)
-            self._action_data.append(action_impl.seed(source, self.target.env))
+#     def gather_resources(self, source):
+#         print("Gathering resources for {0}".format(self.name))
+#         print("Actions: {0}".format(self.target.actions))
+#         self._action_data = []
+#         manager = ActionManager()
+#         for action in self.target.actions:
+#             name = action['action']
+#             parameters = parameters = deepcopy(action)
+#             del parameters['action']
+#             action_impl = manager.action(name)
+#             data = action_impl.from_source(source, parameters, self.target.env)
+#             self._action_data.append(data)
 
 def copy(source, destination):
     raise NotImplementedError
 
 def seed(hostname, source, spawn):
     host = Host(name=hostname)
-    host.from_source(source)
-    host.gather(source)
+    try:
+        host.from_source(source)
+    except IOError:
+        print("Unable to source host {0}".format(hostname))
+        raise
     with spawn.open(source.path_to_seed(hostname), 'w') as dest:
         serialized = yaml.dump(host.to_seed())
         #print(serialized)
         dest.write(serialized)
+
+def plant(hostname, spawn):
+    host = Host.from_seed(spawn)
+    raise NotImplementedError
 
 def _is_dict_like(obj, require_set=False):
      """
@@ -289,6 +357,25 @@ def _topological_sort(deps):
                      if item not in ordered])
     if deps:
         raise CircularDependencyError, deps
+
+# proposal for new action syntax:
+#
+# boolean: true | false
+# string: '...' | "..." | alphanum_with_underscores-or-hyphens.or.periods/or/slashes
+# number: ...
+# atomic: boolean | string | number
+# value_list: atomic | atomic , value_list
+# list: [ ] | [ value_list ]
+# key: words_with_underscores-or-hyphens
+# value: atomic | list | map
+# key_value_list: key : value | key : value, key_value_list
+# map: { } | { key_value_list }
+# parameter_name: words_with_underscores-or-hyphens
+# parameter_value: value
+# parameter: parameter_name = parameter_value
+# parameter_list: parameter | parameter, parameter_list
+# function_name: words_with_underscores-or-hyphens
+# call: function_name | function_name ( parameter_list )
 
 class ActionManager(object):
     __shared_state = {}
