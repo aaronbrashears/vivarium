@@ -13,6 +13,9 @@ class CircularDependencyError(Exception):
 class TargetCollisionError(Exception):
     pass
 
+class HostMismatch(Exception):
+    pass
+
 class Entity(object):
     def __init__(self, *args, **kwargs):
         # print("Entity init {0}".format(kwargs))
@@ -129,9 +132,6 @@ class Host(Entity):
         return self
 
     def to_seed(self):
-        # name (str), _config (dict),
-        # roles (dict => str: rolespec)
-        # stages (...)
         seed = {}
         seed['name'] = self.name
         seed['config'] = self._config
@@ -148,12 +148,41 @@ class Host(Entity):
         seed['stages'] = stages
         return seed
 
+    def from_spawn(self, spawn):
+        with spawn.open(spawn.path_to_seed(self.name)) as definition:
+            config = yaml.load(definition.read())
+        if self.name != config['name']:
+            msg = 'Found definition for {0} when loading {1}.'
+            raise HostMismatch, msg.format(config['name'], self.name)
+        self._config = config['config']
+        for rolename, value in config.get('roles', {}).iteritems():
+            generic_role = Role(name=rolename)
+            generic_role._config = value['role']['config']
+            role_spec = Host.RoleSpec(value['config'], generic_role)
+            self.roles[rolename] = role_spec
+        self.stages = []
+        for stage in config['stages']:
+            steps = {}
+            for name, value in stage.iteritems():
+                target = Target().from_spawn(
+                    value['actions'],
+                    value['depends'],
+                    value['env'])
+                steps[name] = target
+            self.stages.append(steps)
+        return self
+
+    def plant(self, root_dir):
+        for stage in self.stages:
+            for name, target in stage.iteritems():
+                print("Target: {0}".format(name))
+                target.plant(root_dir)
+
     def _gather(self, source):
         targets = self._find_targets(source)
         # for key, value in targets.iteritems():
         #     print("Target: {0} -- {1}".format(key, value.to_seed()))
-        stages = self._build_stages(targets)
-        self.stages = stages
+        self.stages = self._build_stages(targets)
         return self
 
     def _find_targets(self, source):
@@ -198,8 +227,7 @@ class Host(Entity):
         roles = self._config.get('roles', [])
         for name, spec in roles.iteritems():
             if spec is None: spec = {}
-            generic_role = Role(name=name)
-            generic_role.from_source(source)
+            generic_role = Role(name=name).from_source(source)
             role = Host.RoleSpec(spec, generic_role)
             self.roles[name] = role
 
@@ -236,6 +264,17 @@ class Target(object):
             self.actions.append(Action(name, parameters, data))
         return self
 
+    def from_spawn(self, actions, depends, env):
+        self.actions = []
+        self.depends = depends
+        self.env = env
+        for action in actions:
+            name = action['action']
+            parameters = action['parameters']
+            data = action['data']
+            self.actions.append(Action(name, parameters, data))
+        return self
+
     def to_seed(self):
         seed = {}
         actions = []
@@ -245,6 +284,11 @@ class Target(object):
         seed['depends'] = self.depends
         seed['env'] = self.env
         return seed
+
+    def plant(self, root_dir):
+        manager = ActionManager()
+        # for action in self.actions:
+        #     print
 
 # class NamedTarget(object):
 #     def __init__(self, name, target, action_data = None):
@@ -289,12 +333,14 @@ def seed(hostname, source, spawn, stdout):
         pprint.pprint(seed)
     else:
         serialized = yaml.dump(seed)
-        with spawn.open(source.path_to_seed(hostname), 'w') as dest:
+        with spawn.open(spawn.path_to_seed(hostname), 'w') as dest:
             dest.write(serialized)
 
-def plant(hostname, spawn):
-    host = Host.from_seed(spawn)
-    raise NotImplementedError
+def plant(hostname, spawn, dest_dir):
+    host = Host(name=hostname).from_spawn(spawn)
+    # import pprint
+    # pprint.pprint(host.to_seed())
+    host.plant(dest_dir)
 
 def _is_dict_like(obj, require_set=False):
      """

@@ -63,6 +63,33 @@ def _copy(args):
     destination = vivarium.Humus(args.destination)
     vivarium.copy(source, destination)
 
+def _plant_parser(subparsers):
+    plant_parser = subparsers.add_parser(
+        'plant', help='Plant a seed on the local host.')
+    plant_parser.add_argument(
+        '-d', '--dest-dir',
+        action='store',
+        help='Destination directory for configuration. Default is "/".')
+    # plant_parser.add_argument(
+    #     '--dry-run',
+    #     action='store_true',
+    #     default=False,
+    #     help='Destination directory for configuration. Default is "/".')
+    plant_parser.add_argument(
+        'host',
+        action='store',
+        help='Host to generate the seed.')
+    plant_parser.add_argument(
+        'spawn',
+        action='store',
+        help='Spawn to use. Can be yaml file or a directory.')
+    plant_parser.set_defaults(func=_plant)
+    return subparsers
+
+def _plant(args):
+    spawn = humus.Humus(args.spawn)
+    vivarium.plant(args.host, spawn, args.dest_dir)
+
 def main():
     description = """
 Vivarium is a tool for managing small to medium distributed system
@@ -82,6 +109,7 @@ To get usage for a particular command:
         help='commands')
     subparsers = _seed_parser(subparsers)
     subparsers = _copy_parser(subparsers)
+    subparsers = _plant_parser(subparsers)
     args = parser.parse_args()
     args.func(args)
 
