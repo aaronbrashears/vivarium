@@ -124,8 +124,6 @@ class Host(Entity):
     def from_source(self, source):
         with source.open(source.path_to_host(self.name)) as configfile:
             self._load_config(source, configfile)
-            # import pprint
-            # pprint.pprint(self._config)
             self._load_roles(source)
         self._gather(source)
         return self
@@ -277,17 +275,22 @@ class Target(object):
 def copy(source, destination):
     raise NotImplementedError
 
-def seed(hostname, source, spawn):
+def seed(hostname, source, spawn, stdout):
     host = Host(name=hostname)
     try:
         host.from_source(source)
     except IOError:
         print("Unable to source host {0}".format(hostname))
         raise
-    with spawn.open(source.path_to_seed(hostname), 'w') as dest:
-        serialized = yaml.dump(host.to_seed())
-        #print(serialized)
-        dest.write(serialized)
+    seed = host.to_seed()
+    if stdout:
+        print("Configuration for {0}:".format(hostname))
+        import pprint
+        pprint.pprint(seed)
+    else:
+        serialized = yaml.dump(seed)
+        with spawn.open(source.path_to_seed(hostname), 'w') as dest:
+            dest.write(serialized)
 
 def plant(hostname, spawn):
     host = Host.from_seed(spawn)

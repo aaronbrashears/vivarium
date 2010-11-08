@@ -45,10 +45,7 @@ def _seed(args):
     spawn = humus.Humus(args.spawn)
     if args.source is None: source = spawn
     else: source = humus.Humus(args.source)
-    #dest_dir = args.dest_dir
-    if args.stdout:
-        raise NotImplementedError, 'Not able to emit to stdout yet.'
-    vivarium.seed(args.host, source, spawn)
+    vivarium.seed(args.host, source, spawn, args.stdout)
 
 def _copy_parser(subparsers):
     copy_parser = subparsers.add_parser(
