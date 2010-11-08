@@ -14,12 +14,6 @@ def _seed_parser(subparsers):
 Given a hostname in the form 'my.example.com', gather all roles,
 environments, packages, templates, and files to generate the seed
 for the spawn.""")
-    dest_group = seed_parser.add_mutually_exclusive_group()
-    # dest_group.add_argument(
-    #     '-d', '--dest-dir',
-    #     action='store',
-    #     default='/',
-    #     help='Destination directory for configuration. Default is "/".')
     seed_parser.add_argument(
         'host',
         action='store',
@@ -33,11 +27,11 @@ for the spawn.""")
         action='store',
         default=None,
         help='The source spawn to use if different from the spawn.')
-    dest_group.add_argument(
+    seed_parser.add_argument(
         '--stdout',
         action='store_true',
         default=False,
-        help='Emit configuration to stdout. NOT YET IMPLEMENTED.')
+        help='Emit configuration to stdout.')
     seed_parser.set_defaults(func=_seed)
     return subparsers
 
