@@ -465,3 +465,14 @@ class ActionManager(object):
 
     def action(self, name):
         return self._actions[name]()
+
+class Ecosystem(object):
+    __shared_state = {}
+    def __init__(self):
+        self.__dict__ = Ecosystem.__shared_state
+        if not hasattr(self, '_initialized'):
+            self._environments = _find_local_plugins('environments')
+            self._initialized = True
+
+    def environment(self, name):
+        return self._ennvironments[name]()
