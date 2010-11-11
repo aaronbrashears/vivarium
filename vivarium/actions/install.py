@@ -1,13 +1,11 @@
 from copy import deepcopy
 from vivarium.vivarium import File
+from vivarium.vivarium import Action
 
 def register(actions):
     actions['install'] = Install
 
-class Install(object):
-    def __init__(self):
-        pass
-
+class Install(Action):
     def gather(self, source, parameters, env):
         rv = {}
         files = {}

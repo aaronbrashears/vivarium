@@ -426,26 +426,42 @@ def _topological_sort(deps):
 # function_name: words_with_underscores-or-hyphens
 # call: function_name | function_name ( parameter_list )
 
+def _find_local_plugins(subdir):
+    my_dir = (os.path.dirname(os.path.realpath(__file__)))
+    plugin_dir = os.path.join(my_dir, subdir)
+    return _find_plugins(plugin_dir)
+
+def _find_plugins(path):
+    plugins = {}
+    plugin_files = [x[:-3] for x in os.listdir(path) if x.endswith(".py")]
+    sys.path.insert(0, path)
+    for plugin in plugin_files:
+        mod = __import__(plugin)
+        if hasattr(mod, 'register'):
+            mod.register(plugins)
+    sys.path.pop(0)
+    return plugins
+
+class Action(object):
+    def gather(self, source, parameters, env):
+        return {}
+
+    def sow(self, parameters, data, env):
+        return True
+
+    def plant(self, parameters, data, env):
+        return True
+
+    def reap(self, parameters, data, env):
+        return True
+
 class ActionManager(object):
     __shared_state = {}
     def __init__(self):
         self.__dict__ = ActionManager.__shared_state
         if not hasattr(self, '_initialized'):
-            self._find_actions()
+            self._actions = _find_local_plugins('actions')
             self._initialized = True
-
-    def _find_actions(self):
-        self._actions = {}
-        my_dir = (os.path.dirname(os.path.realpath(__file__)))
-        plugin_dir = os.path.join(my_dir, 'actions')
-        plugin_files = [x[:-3] for x in os.listdir(plugin_dir) \
-                            if x.endswith(".py")]
-        sys.path.insert(0, plugin_dir)
-        for plugin in plugin_files:
-            mod = __import__(plugin)
-            if hasattr(mod, 'register'):
-                mod.register(self._actions)
-        sys.path.pop(0)
 
     def action(self, name):
         return self._actions[name]()
