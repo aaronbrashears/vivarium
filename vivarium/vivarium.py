@@ -93,10 +93,10 @@ class Role(Entity):
         result = {}
         all_targets = _merge_dicts(self._config['targets'], override_targets)
         for targetname, value in all_targets.iteritems():
-            actions = value['actions']
+            steps = value['steps']
             depends = value.get('depends', None)
             env = _merge_dicts(value.get('env', {}), override_env)
-            target = Target().from_source(source, actions, depends, env)
+            target = Target().from_source(source, steps, depends, env)
             result[targetname] = target
         return result
 
@@ -165,7 +165,7 @@ class Host(Entity):
             steps = {}
             for name, value in stage.iteritems():
                 target = Target().from_spawn(
-                    value['actions'],
+                    value['steps'],
                     value['depends'],
                     value['env'])
                 steps[name] = target
@@ -190,9 +190,9 @@ class Host(Entity):
         targets = {}
         env = self._config.get('env', {})
         for name, value in self._config.get('targets', {}).iteritems():
-            actions = value['actions']
+            steps = value['steps']
             depends = value.get('depends', None)
-            target = Target().from_source(source, actions, depends, env)
+            target = Target().from_source(source, steps, depends, env)
             targets[name] = target
             target_in[name] = self.name
         for rolename, role in self.roles.iteritems():
@@ -231,56 +231,56 @@ class Host(Entity):
             role = Host.RoleSpec(spec, generic_role)
             self.roles[name] = role
 
-class Action(object):
-    def __init__(self, name, parameters, data):
-        self.action = name
-        self.parameters = parameters
-        self.data = data
-
-    def to_seed(self):
-        seed = {}
-        seed['action'] = self.action
-        seed['parameters'] = self.parameters
-        seed['data'] = self.data
-        return seed
-
 class Target(object):
+    class Step(object):
+        def __init__(self, name, parameters, data):
+            self.action = name
+            self.parameters = parameters
+            self.data = data
+
+        def to_seed(self):
+            seed = {}
+            seed['action'] = self.action
+            seed['parameters'] = self.parameters
+            seed['data'] = self.data
+            return seed
+
     def __init__(self):
-        self.actions = []
+        self.steps = []
         self.depends = []
         self.env = {}
 
-    def from_source(self, source, actions, depends, env):
-        self.actions = []
+    def from_source(self, source, steps, depends, env):
+        self.steps = []
         self.depends = depends
         self.env = env
         manager = ActionManager()
-        for action in actions:
-            name = action['action']
-            parameters = parameters = deepcopy(action)
+        for step in steps:
+            name = step['action']
+            parameters = deepcopy(step)
             del parameters['action']
             action_impl = manager.action(name)
             data = action_impl.gather(source, parameters, env)
-            self.actions.append(Action(name, parameters, data))
+            self.steps.append(Target.Step(name, parameters, data))
         return self
 
-    def from_spawn(self, actions, depends, env):
-        self.actions = []
+    def from_spawn(self, steps, depends, env):
+        self.steps = []
         self.depends = depends
         self.env = env
-        for action in actions:
-            name = action['action']
-            parameters = action['parameters']
-            data = action['data']
-            self.actions.append(Action(name, parameters, data))
+        for step in steps:
+            name = step['action']
+            parameters = step['parameters']
+            data = step['data']
+            self.steps.append(Target.Step(name, parameters, data))
         return self
 
     def to_seed(self):
         seed = {}
-        actions = []
-        for action in self.actions:
-            actions.append(action.to_seed())
-        seed['actions'] = actions
+        steps = []
+        for step in self.steps:
+            steps.append(step.to_seed())
+        seed['steps'] = steps
         seed['depends'] = self.depends
         seed['env'] = self.env
         return seed

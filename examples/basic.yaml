@@ -10,9 +10,10 @@ includes:
   basic.host: |
     targets:
       basic-host:
-        actions:
+        steps:
           - action: install
             files: [/etc.hosts]
+          - action: install
             packages: [postfix, mailutils]
 # Proposed alternate syntax:
 #          - 'install(file=etc.hosts, packages=[postfix, mailutils])'
@@ -28,7 +29,7 @@ roles:
   www: |
     targets:
       apache:
-        actions:
+        steps:
           - action: install
             packages: [apache, libapache2-mod-proxy-html]
         depends: [ basic-host ]
