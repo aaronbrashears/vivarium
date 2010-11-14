@@ -17,8 +17,21 @@ def _config_parser(subparsers, defaults):
 
 def _config(args):
     for name, value in args._get_kwargs():
+        if name == 'config': continue
         if not hasattr(value, '__call__'):
             print('{0}: {1}'.format(name, value))
+
+def _add_config_option(parser):
+    parser.add_argument(
+        '--config',
+        action='store_true',
+        default=False,
+        help='Emit application configuration information and exit.')
+
+def _show_parsed_config(args):
+    if args.config:
+        _config(args)
+        sys.exit(0)
 
 def _seed_parser(subparsers, defaults):
     seed_parser = subparsers.add_parser(
@@ -45,10 +58,12 @@ for the spawn.""")
         action='store_true',
         default=False,
         help='Emit configuration to stdout.')
+    _add_config_option(seed_parser)
     seed_parser.set_defaults(func=_seed, **defaults)
     return subparsers
 
 def _seed(args):
+    _show_parsed_config(args)
     spawn = humus.Humus(args.spawn)
     if args.source is None: source = spawn
     else: source = humus.Humus(args.source)
@@ -68,10 +83,12 @@ def _copy_parser(subparsers, defaults):
 Destination for the copy. If the destination is a directory then the
 configuration will use the file system back-end. If the destination is
 a file or ends in .yaml, the yaml back-end will be used.""")
+    _add_config_option(copy_parser)
     copy_parser.set_defaults(func=_copy, **defaults)
     return subparsers
 
 def _copy(args):
+    _show_parsed_config(args)
     source = vivarium.Humus(args.source)
     destination = vivarium.Humus(args.destination)
     vivarium.copy(source, destination)
@@ -82,7 +99,13 @@ def _plant_parser(subparsers, defaults):
     plant_parser.add_argument(
         '-d', '--dest-dir',
         action='store',
-        help='Destination directory for configuration. Default is "/".')
+        default='/',
+        help='Target directory for the plant operation.')
+    plant_parser.add_argument(
+        '-s', '--stage-dir',
+        action='store',
+        default='/tmp',
+        help='Directory for plant temporary files.')
     # plant_parser.add_argument(
     #     '--dry-run',
     #     action='store_true',
@@ -96,10 +119,12 @@ def _plant_parser(subparsers, defaults):
         'spawn',
         action='store',
         help='Spawn to use. Can be yaml file or a directory.')
+    _add_config_option(plant_parser)
     plant_parser.set_defaults(func=_plant, **defaults)
     return subparsers
 
 def _plant(args):
+    _show_parsed_config(args)
     spawn = humus.Humus(args.spawn)
     vivarium.plant(args.host, spawn, args.dest_dir)
 
