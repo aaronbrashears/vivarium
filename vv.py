@@ -11,14 +11,14 @@ import vivarium.vivarium as vivarium
 def _config_parser(subparsers, defaults):
     config_parser = subparsers.add_parser(
         'config',
-        help="Manage configuration information.")
+        help='Manage configuration information.')
     config_parser.set_defaults(func=_config, **defaults)
     return subparsers
 
 def _config(args):
     for name, value in args._get_kwargs():
         if not hasattr(value, '__call__'):
-            print("{0}: {1}".format(name, value))
+            print('{0}: {1}'.format(name, value))
 
 def _seed_parser(subparsers, defaults):
     seed_parser = subparsers.add_parser(
