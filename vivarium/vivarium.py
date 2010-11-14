@@ -287,8 +287,10 @@ class Target(object):
 
     def plant(self, root_dir):
         manager = ActionManager()
-        # for action in self.actions:
-        #     print
+        # print("Env: {0}".format(self.env))
+        # for step in self.steps:
+        #     print("Action: {0}({1})".format(step.action, step.parameters))
+        #     print("Data: {0}".format(step.data))
 
 # class NamedTarget(object):
 #     def __init__(self, name, target, action_data = None):
