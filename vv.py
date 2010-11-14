@@ -5,7 +5,6 @@ import os.path
 import sys
 import yaml
 
-import vivarium.humus as humus
 import vivarium.vivarium as vivarium
 
 def _config_parser(subparsers, defaults):
@@ -31,7 +30,8 @@ def _add_config_option(parser):
 def _show_parsed_config(args):
     if args.config:
         _config(args)
-        sys.exit(0)
+        return True
+    return False
 
 def _seed_parser(subparsers, defaults):
     seed_parser = subparsers.add_parser(
@@ -63,11 +63,7 @@ for the spawn.""")
     return subparsers
 
 def _seed(args):
-    _show_parsed_config(args)
-    spawn = humus.Humus(args.spawn)
-    if args.source is None: source = spawn
-    else: source = humus.Humus(args.source)
-    vivarium.seed(args.host, source, spawn, args.stdout)
+    _show_parsed_config(args) or vivarium.seed(args)
 
 def _copy_parser(subparsers, defaults):
     copy_parser = subparsers.add_parser(
@@ -88,10 +84,7 @@ a file or ends in .yaml, the yaml back-end will be used.""")
     return subparsers
 
 def _copy(args):
-    _show_parsed_config(args)
-    source = vivarium.Humus(args.source)
-    destination = vivarium.Humus(args.destination)
-    vivarium.copy(source, destination)
+    _show_parsed_config(args) or vivarium.copy(args)
 
 def _plant_parser(subparsers, defaults):
     plant_parser = subparsers.add_parser(
@@ -124,9 +117,7 @@ def _plant_parser(subparsers, defaults):
     return subparsers
 
 def _plant(args):
-    _show_parsed_config(args)
-    spawn = humus.Humus(args.spawn)
-    vivarium.plant(args.host, spawn, args.dest_dir)
+    _show_parsed_config(args) or vivarium.plant(args)
 
 def _initial_parser(defaults = {}):
     description = """

@@ -4,6 +4,8 @@ import os.path
 import sys
 import yaml
 
+import humus
+
 class IncludeLoopError(Exception):
     pass
 
@@ -318,31 +320,37 @@ class Target(object):
 #             data = action_impl.from_source(source, parameters, self.target.env)
 #             self._action_data.append(data)
 
-def copy(source, destination):
+def copy(args):
+    source = humus.Humus(args.source)
+    destination = humus.Humus(args.destination)
     raise NotImplementedError
 
-def seed(hostname, source, spawn, stdout):
-    host = Host(name=hostname)
+def seed(args):
+    spawn = humus.Humus(args.spawn)
+    if args.source is None: source = spawn
+    else: source = humus.Humus(args.source)
+    host = Host(name=args.host)
     try:
         host.from_source(source)
     except IOError:
-        print("Unable to source host {0}".format(hostname))
+        print("Unable to source host {0}".format(args.host))
         raise
     seed = host.to_seed()
-    if stdout:
-        print("Configuration for {0}:".format(hostname))
+    if args.stdout:
+        print("Configuration for {0}:".format(args.host))
         import pprint
         pprint.pprint(seed)
     else:
         serialized = yaml.dump(seed)
-        with spawn.open(spawn.path_to_seed(hostname), 'w') as dest:
+        with spawn.open(spawn.path_to_seed(args.host), 'w') as dest:
             dest.write(serialized)
 
-def plant(hostname, spawn, dest_dir):
-    host = Host(name=hostname).from_spawn(spawn)
+def plant(args):
+    spawn = humus.Humus(args.spawn)
+    host = Host(name=args.host).from_spawn(spawn)
     # import pprint
     # pprint.pprint(host.to_seed())
-    host.plant(dest_dir)
+    host.plant(args.dest_dir)
 
 def _is_dict_like(obj, require_set=False):
      """
