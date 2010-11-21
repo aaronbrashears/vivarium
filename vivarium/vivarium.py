@@ -317,32 +317,6 @@ class Target(object):
         for step, context in zip(self.steps, contexts):
             reap.append(step.action_impl.reap(context))
 
-# class NamedTarget(object):
-#     def __init__(self, name, target, action_data = None):
-#         self.name = name
-#         self.target = target
-#         self._action_data = action_data
-
-#     def to_seed(self):
-#         seed = {}
-#         seed['name'] = self.name
-#         seed['target'] = self.target.to_seed()
-#         seed['action_data'] = self._action_data
-#         return seed
-
-#     def gather_resources(self, source):
-#         print("Gathering resources for {0}".format(self.name))
-#         print("Actions: {0}".format(self.target.actions))
-#         self._action_data = []
-#         manager = ActionManager()
-#         for action in self.target.actions:
-#             name = action['action']
-#             parameters = parameters = deepcopy(action)
-#             del parameters['action']
-#             action_impl = manager.action(name)
-#             data = action_impl.from_source(source, parameters, self.target.env)
-#             self._action_data.append(data)
-
 def copy(args):
     source = humus.Humus(args.source)
     destination = humus.Humus(args.destination)
