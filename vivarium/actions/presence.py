@@ -5,7 +5,9 @@ def register(actions):
     actions['watch_files'] = WatchFile
 
 class PublishPresence(Action):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(PublishPresence, self).__init__(*args, **kwargs)
 
 class WatchFile(Action):
-    pass
+    def __init__(self, *args, **kwargs):
+        super(WatchFile, self).__init__(*args, **kwargs)

@@ -164,21 +164,23 @@ class Host(Entity):
             self.roles[rolename] = role_spec
         self.stages = []
         for stage in config['stages']:
-            steps = {}
+            targets = {}
             for name, value in stage.iteritems():
                 target = Target().from_spawn(
                     value['steps'],
                     value['depends'],
                     value['env'])
-                steps[name] = target
-            self.stages.append(steps)
+                targets[name] = target
+            self.stages.append(targets)
         return self
 
-    def plant(self, root_dir):
-        for stage in self.stages:
+    def plant(self, es, default_env, args):
+        for count, stage in enumerate(self.stages):
+            print("Stage {0}".format(count))
+            print("********")
             for name, target in stage.iteritems():
                 print("Target: {0}".format(name))
-                target.plant(root_dir)
+                target.plant(name, es, default_env, args)
 
     def _gather(self, source):
         targets = self._find_targets(source)
@@ -235,14 +237,16 @@ class Host(Entity):
 
 class Target(object):
     class Step(object):
-        def __init__(self, name, parameters, data):
-            self.action = name
+        def __init__(self, number, name, impl, parameters, data):
+            self.number = number
+            self.action_name = name
+            self.action_impl = impl
             self.parameters = parameters
             self.data = data
 
         def to_seed(self):
             seed = {}
-            seed['action'] = self.action
+            seed['action'] = self.action_name
             seed['parameters'] = self.parameters
             seed['data'] = self.data
             return seed
@@ -257,24 +261,28 @@ class Target(object):
         self.depends = depends
         self.env = env
         manager = ActionManager()
-        for step in steps:
+        for num, step in enumerate(steps):
             name = step['action']
             parameters = deepcopy(step)
             del parameters['action']
             action_impl = manager.action(name)
             data = action_impl.gather(source, parameters, env)
-            self.steps.append(Target.Step(name, parameters, data))
+            the_step = Target.Step(num, name, action_impl, parameters, data)
+            self.steps.append(the_step)
         return self
 
     def from_spawn(self, steps, depends, env):
         self.steps = []
         self.depends = depends
         self.env = env
-        for step in steps:
+        manager = ActionManager()
+        for num, step in enumerate(steps):
             name = step['action']
             parameters = step['parameters']
             data = step['data']
-            self.steps.append(Target.Step(name, parameters, data))
+            action_impl = manager.action(name)
+            the_step = Target.Step(num, name, action_impl, parameters, data)
+            self.steps.append(the_step)
         return self
 
     def to_seed(self):
@@ -287,12 +295,27 @@ class Target(object):
         seed['env'] = self.env
         return seed
 
-    def plant(self, root_dir):
-        manager = ActionManager()
-        # print("Env: {0}".format(self.env))
-        # for step in self.steps:
-        #     print("Action: {0}({1})".format(step.action, step.parameters))
-        #     print("Data: {0}".format(step.data))
+    def plant(self, target_name, es, default_env, args):
+        contexts = []
+        for num, step in enumerate(self.steps):
+            context = ActionContext(
+                es,
+                target_name,
+                num,
+                step.parameters,
+                step.data,
+                _merge_dicts(default_env, self.env),
+                args)
+            contexts.append(context)
+        sow = []
+        for step, context in zip(self.steps, contexts):
+            sow.append(step.action_impl.sow(context))
+        plant = []
+        for step, context in zip(self.steps, contexts):
+            plant.append(step.action_impl.plant(context))
+        reap = []
+        for step, context in zip(self.steps, contexts):
+            reap.append(step.action_impl.reap(context))
 
 # class NamedTarget(object):
 #     def __init__(self, name, target, action_data = None):
@@ -348,9 +371,23 @@ def seed(args):
 def plant(args):
     spawn = humus.Humus(args.spawn)
     host = Host(name=args.host).from_spawn(spawn)
-    # import pprint
-    # pprint.pprint(host.to_seed())
-    host.plant(args.dest_dir)
+    es = Ecosystem().es(args=args)
+    es.bootstrap()
+    default_env = {'HOST' :
+                   {'FQDN': args.host,
+                    'SHORT': _shortname(args.host),
+                    'DOMAIN': _domainname(args.host),
+                    }
+                   }
+    host.plant(es, default_env, args)
+
+def _shortname(name):
+    if '.' not in name: return name
+    return name.split('.')[0]
+
+def _domainname(name):
+    if '.' not in name: return None
+    return '.'.join(name.split('.')[1:])
 
 def _is_dict_like(obj, require_set=False):
      """
@@ -442,6 +479,7 @@ def _find_local_plugins(subdir):
     return _find_plugins(plugin_dir)
 
 def _find_plugins(path):
+    #print("Looking for plugins in {0}".format(path))
     plugins = {}
     plugin_files = [x[:-3] for x in os.listdir(path) if x.endswith(".py")]
     sys.path.insert(0, path)
@@ -452,17 +490,27 @@ def _find_plugins(path):
     sys.path.pop(0)
     return plugins
 
+class ActionContext(object):
+    def __init__(self, es, target_name, num, params, data, env, args):
+        self.es = es
+        self.target_name = target_name
+        self.number = num
+        self.params = params
+        self.data = data
+        self.env = env
+        self.args = args
+
 class Action(object):
     def gather(self, source, parameters, env):
         return {}
 
-    def sow(self, parameters, data, env):
+    def sow(self, context):
         return True
 
-    def plant(self, parameters, data, env):
+    def plant(self, context):
         return True
 
-    def reap(self, parameters, data, env):
+    def reap(self, context):
         return True
 
 class ActionManager(object):
@@ -473,16 +521,43 @@ class ActionManager(object):
             self._actions = _find_local_plugins('actions')
             self._initialized = True
 
-    def action(self, name):
-        return self._actions[name]()
+    def action(self, name, *args, **kwargs):
+        return self._actions[name](*args, **kwargs)
+
+class Environment(object):
+    def __init__(self, *args, **kwargs):
+        self.root = None
+        self.args = kwargs.get('args', None)
+        if self.args is not None:
+            self.root = self.args.root_dir
+            if not self.root.startswith('/'):
+                self.root = os.path.realpath(self.root)
+
+    def is_viable(self):
+        return False
+
+    def bootstrap(self):
+        pass
 
 class Ecosystem(object):
     __shared_state = {}
     def __init__(self):
         self.__dict__ = Ecosystem.__shared_state
         if not hasattr(self, '_initialized'):
-            self._environments = _find_local_plugins('environments')
-            self._initialized = True
+            self._initialize()
 
-    def environment(self, name):
-        return self._ennvironments[name]()
+    def _initialize(self):
+        self._environments = _find_local_plugins('environments')
+        self._local_environment = None
+        for name, germ in self._environments.iteritems():
+            petri = germ()
+            if petri.is_viable():
+                print("Found viable {0} system.".format(name))
+                self._local_environment = germ
+                break
+        self._initialized = True
+
+    def es(self, name=None, args=None):
+        if name is None:
+            return self._local_environment(args=args)
+        return self._environments[name](args=args)

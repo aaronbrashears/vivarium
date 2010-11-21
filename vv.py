@@ -90,7 +90,7 @@ def _plant_parser(subparsers, defaults):
     plant_parser = subparsers.add_parser(
         'plant', help='Plant a seed on the local host.')
     plant_parser.add_argument(
-        '-d', '--dest-dir',
+        '-r', '--root-dir',
         action='store',
         default='/',
         help='Target directory for the plant operation.')
