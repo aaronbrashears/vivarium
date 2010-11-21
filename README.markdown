@@ -70,6 +70,9 @@ This is a planned feature and not near implementation.
 Use
 ===
 
+Command Line
+------------
+
 Armed with the information in the overview you should be able to use
 the command line tool `vv.py` to experiment. To get an idea of what
 `vv.py` can do at this time:
@@ -86,6 +89,49 @@ Will give help on the `seed` command.
 The help should always be up to date with the current state of
 development.
 
+Configuration File
+------------------
+
+Command line options can be provided in a configuration file. The
+configuration file defaults to `~/.vivarium.yaml` and can be
+overridden with the `--config-file` option. Values found in the
+configuration file are treated as defaults with command line options
+taking precedence. Options to commands by putting them in sections
+with the same name as the command.
+
+My vivarium configuration file currently looks like:
+
+    seed:
+        source: examples/basic.yaml
+    plant:
+        root_dir: lucid-chroot
+    stage_dir: /tmp/stage
+    debian:
+        base_tarball: /var/cache/debootstrap/lucid.tgz
+
+To examine how your configuration looks, all commands accept a
+`--config` which will display the arguments as the command sees them
+after parsing the configuration file and command line. With the
+configuration above, the examining the configuration for the plant
+command would produce:
+
+    $ ./vv.py plant --root-dir=/tmp/root www.example.com seed --config
+
+    debian: {'base_tarball': '/home/phoenix/tmp/lucid.tgz'}
+    host: www.example.com
+    plant: {'root_dir': 'lucid-chroot', 'stage_dir': '/tmp/stage'}
+    root_dir: /tmp/root
+    seed: {'source': 'examples/basic.yaml'}
+    spawn: seed
+    stage_dir: /tmp/stage
+
+Notice the `root_dir` was chosen from the command line option while
+the `stage_dir` was supplied by the plant sub-section. All of the
+command line options will appear at the top level. Sections like
+`debian` are useful for specialized configuration -- in this case, to
+specify a base tarball for debootstrap to reduce package downloads
+during development.
+
 Configuration
 =============
 
@@ -93,7 +139,7 @@ Host
 ----
 
 To configure a host, the host must appear in the `/hosts` section of
-the source with the host domain parts forming subdirectories in big
+the source with the host domain parts forming sub-directories in big
 endian order. For example, the host `kdc-01.example.com` would appear
 in the file located at `/hosts/com/example/kdc-01` in the source. The
 `kdc-01` file can specify targets, roles, and environment.
