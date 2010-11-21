@@ -68,12 +68,6 @@ class Install(Action):
     def _working_filename(self, name):
         return os.path.join(self._dir, name.replace('/','%'))
 
-    class ModeChange(object):
-        def __init__(self, op, flag, affected, value, mentioned):
-            self.op = op
-            self.affected = affected
-            self.value = value
-
     @staticmethod
     def _is_int(mode_string):
         try:
