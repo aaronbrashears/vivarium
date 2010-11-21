@@ -511,7 +511,24 @@ class Environment(object):
         return False
 
     def bootstrap(self):
-        pass
+        raise NotImplemented
+
+    def mkdir(self, subdir):
+        path = self._filename(subdir)
+        try:
+            os.makedirs(path)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST: pass
+            else: raise
+
+    def open(self, filename, mode):
+        fullname = self._filename(filename)
+        return open(fullname, mode)
+
+    def _filename(self, name):
+        if name.startswith('/') and self.root != '/':
+            name = name[1:]
+        return os.path.join(self.root, name)
 
 class Ecosystem(object):
     __shared_state = {}
