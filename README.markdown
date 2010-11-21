@@ -154,6 +154,19 @@ on the host. Targets can depend on other targets and vivarium will
 automatically sort the targets so that all actions from dependent
 targets are run prior starting a particular target.
 
+During the planting process of taking a seed to a full configuration,
+targets with no dependencies are built first in stage 0. Targets with
+dependencies met by stage 0 will be built in stage 1 and so on until
+all targets have completed. There is no defined ordering of target
+construction inside of a stage and may even be built in parallel.
+
+All actions in a target are carried out in three phases. All actions
+are given the opportunity to prepare themselves during the `sow`
+process, do their primary work in the `plant` process, and finally
+perform any clean-up in the `reap process. For a particular target,
+all actions will sow first, then all actions will plant, followed by
+the all actions reaping.
+
 Roles
 -----
 
