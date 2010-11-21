@@ -8,3 +8,5 @@
 * Investigate installing eggs.
 * Implement humus copy.
 * More unit tests.
+* Move _chown() and _chmod() from Install to the ecosystem.
+* Use vivarium.File during for planting.
