@@ -18,6 +18,7 @@ class Install(Action):
 
     def __init__(self, *args, **kwargs):
         super(Install, self).__init__(*args, **kwargs)
+        self._dir = None
 
     def gather(self, source, parameters, env):
         rv = {}
@@ -47,6 +48,9 @@ class Install(Action):
     def reap(self, ctxt):
         print("Install: reaping step {0}".format(ctxt.number))
         fnmap = self._mk_fn_map('reap')
+        for key, value in ctxt.params.iteritems():
+            # print "running",key,value
+            fnmap[key](value, ctxt)
         return True
 
     @staticmethod
@@ -98,6 +102,9 @@ class Install(Action):
 
     @staticmethod
     def _chown(fd, filespec):
+        # *NOTE: This method should be moved to the the ecosystem
+        # since the owner and group are potentially different in a
+        # chroot environment. 2010-11-21 AB
         uid = -1
         gid = -1
         owner = filespec.get('owner', None)
@@ -120,7 +127,6 @@ class Install(Action):
             os.fchmod(fd, mode)
 
     def _sow_files(self, files, ctxt):
-        print "_sow_files", files
         self._dir = self._work_dir(
             ctxt.args.stage_dir,
             ctxt.target_name,
@@ -129,7 +135,7 @@ class Install(Action):
         for fl in files:
             # make sure we can write to the destination
             filespec = ctxt.data['files'][fl]
-            print("{0}: {1}".format(fl, filespec))
+            # print("{0}: {1}".format(fl, filespec))
             ctxt.es.open(filespec['destination'], 'ab').close()
             if 'content' in filespec:
                 content = filespec['content']
@@ -139,9 +145,6 @@ class Install(Action):
             filename = self._working_filename(fl)
             with ctxt.es.open(filename, 'w') as output:
                 output.write(content)
-
-    def _sow_packages(self, packages, ctxt):
-        print "_sow_packages", packages
 
     def _plant_files(self,  files, ctxt):
         for fl in files:
@@ -155,11 +158,18 @@ class Install(Action):
                     Install._chown(fd, filespec)
                     Install._chmod(fd, filespec)
 
-    def _plant_packages(self, packages, ctxt):
-        print "_plant_packages"
-
     def _reap_files(self, files, ctxt):
-        print "_reap_files"
+        # *TODO: clean up intermediary files and directories.
+        pass
+
+    def _sow_packages(self, packages, ctxt):
+        for package in packages:
+            ctxt.es.download_package(package)
+
+    def _plant_packages(self, packages, ctxt):
+        for package in packages:
+            ctxt.es.install_package(package)
 
     def _reap_packages(self, packages, ctxt):
-        print "_reap_packages"
+        # *TODO: remove the package archive
+        pass

@@ -31,7 +31,7 @@ roles:
       apache:
         steps:
           - action: install
-            packages: [apache, libapache2-mod-proxy-html]
+            packages: [apache2, libapache2-mod-proxy-html]
         depends: [ basic-host ]
 # Proposed alternate syntax:
 #       actions:[ 'install(packages=[apache, libapache2-mod-proxy-html])' ]

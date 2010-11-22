@@ -334,7 +334,9 @@ def seed(args):
         raise
     seed = host.to_seed()
     if args.stdout:
-        print("Configuration for {0}:".format(args.host))
+        msg = "Configuration for {0}:".format(args.host)
+        print(msg)
+        print("="*len(msg))
         import pprint
         pprint.pprint(seed)
     else:
@@ -507,12 +509,24 @@ class Environment(object):
             if not self.root.startswith('/'):
                 self.root = os.path.realpath(self.root)
 
+    #
+    # Abstract interface
+    #
     def is_viable(self):
         return False
 
     def bootstrap(self):
         raise NotImplemented
 
+    def download_package(self, package):
+        raise NotImplemented
+
+    def install_package(self, package):
+        raise NotImplemented
+
+    #
+    # Utility methods
+    #
     def mkdir(self, subdir):
         path = self._filename(subdir)
         try:
