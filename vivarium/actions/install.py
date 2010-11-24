@@ -33,7 +33,6 @@ class Install(Action):
         print("Install: sowing step {0}".format(ctxt.number))
         fnmap = self._mk_fn_map('sow')
         for key, value in ctxt.params.iteritems():
-            # print "running",key,value
             fnmap[key](value, ctxt)
         return True
 
@@ -41,7 +40,6 @@ class Install(Action):
         print("Install: planting step {0}".format(ctxt.number))
         fnmap = self._mk_fn_map('plant')
         for key, value in ctxt.params.iteritems():
-            # print "running",key,value
             fnmap[key](value, ctxt)
         return True
 
@@ -49,7 +47,6 @@ class Install(Action):
         print("Install: reaping step {0}".format(ctxt.number))
         fnmap = self._mk_fn_map('reap')
         for key, value in ctxt.params.iteritems():
-            # print "running",key,value
             fnmap[key](value, ctxt)
         return True
 
@@ -136,27 +133,31 @@ class Install(Action):
             # make sure we can write to the destination
             filespec = ctxt.data['files'][fl]
             # print("{0}: {1}".format(fl, filespec))
-            ctxt.es.open(filespec['destination'], 'ab').close()
             if 'content' in filespec:
                 content = filespec['content']
             else:
                 tpl = Template(filespec['template'], searchList=[ctxt.env])
                 content = str(tpl)
             filename = self._working_filename(fl)
-            with ctxt.es.open(filename, 'w') as output:
-                output.write(content)
+            def _file_sow():
+                open(filespec['destination'], 'ab').close()
+                with open(filename, 'w') as output:
+                    output.write(content)
+            ctxt.es.work(_file_sow)
 
     def _plant_files(self,  files, ctxt):
         for fl in files:
             filespec = ctxt.data['files'][fl]
             src_filename = self._working_filename(fl)
             dst_filename = filespec['destination']
-            with ctxt.es.open(src_filename, 'rb') as src:
-                with ctxt.es.open(dst_filename, 'wb') as dst:
-                    shutil.copyfileobj(src, dst)
-                    fd = dst.fileno()
-                    Install._chown(fd, filespec)
-                    Install._chmod(fd, filespec)
+            def _file_plant():
+                with open(src_filename, 'rb') as src:
+                    with open(dst_filename, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+                        fd = dst.fileno()
+                        Install._chown(fd, filespec)
+                        Install._chmod(fd, filespec)
+            ctxt.es.work(_file_plant)
 
     def _reap_files(self, files, ctxt):
         # *TODO: clean up intermediary files and directories.

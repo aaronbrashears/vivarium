@@ -524,6 +524,12 @@ class Environment(object):
     def install_package(self, package):
         raise NotImplemented
 
+    def run(self, command):
+        raise NotImplemented
+
+    def work(self, callback, *args, **kwargs):
+        raise NotImplemented
+
     #
     # Utility methods
     #

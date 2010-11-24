@@ -55,8 +55,10 @@ class Debian(Environment):
     def is_viable(self):
         # Duck-typing all the way.
         apt = subprocess.call(['aptitude', '--version'])
-        deboot = subprocess.call(['debootstrap', '--version'])
-        if apt == deboot == 0:
+        # only necessary for use in chroot.
+        # deboot = subprocess.call(['debootstrap', '--version'])
+        # if apt == deboot == 0:
+        if apt == 0:
             return True
         else:
             print("Debian not viable: {0}".format(rv))
@@ -87,14 +89,21 @@ class Debian(Environment):
             # print("Bootstrapping: {0}".format(' '.join(cmd)))
             subprocess.call(cmd)
 
-    @jailed
     def download_package(self, package):
-        print("Download: {0}".format(package))
-        cmd=['aptitude','download', package]
-        subprocess.call(cmd)
+        # print("Download: {0}".format(package))
+        cmd=['aptitude','install','--download-only', package]
+        return self.run(cmd)
+
+    def install_package(self, package):
+        # print("Install: {0}".format(package))
+        cmd=['aptitude','install', package]
+        return self.run(cmd)
 
     @jailed
-    def install_package(self, package):
-        print("Install: {0}".format(package))
-        cmd=['aptitude','install', package]
-        subprocess.call(cmd)
+    def run(self, command):
+        # print("run: {0}".format(command))
+        return subprocess.call(command)
+
+    @jailed
+    def work(self, fn, *args, **kwargs):
+        return fn(*args, **kwargs)

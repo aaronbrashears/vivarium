@@ -3,10 +3,8 @@
 * Split ActionManager out of vivarium.py.
 * Split Ecosystem out of vivarium.py
 * Finish installing files.
-* Implement installing packages.
 * Implement installing gems.
 * Investigate installing eggs.
 * Implement humus copy.
 * More unit tests.
-* Move _chown() and _chmod() from Install to the ecosystem.
 * Use vivarium.File during for planting.
