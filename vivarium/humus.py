@@ -22,6 +22,18 @@ class Humus(object):
     def open(self, filename, mode='r'):
         return self._base.open(filename, mode)
 
+    def list(self, dirname):
+        return self._base.list(dirname)
+
+    def isfile(self, filename):
+        return self._base.isfile(filename)
+
+    def isdir(self, dirname):
+        return self._base.isdir(dirname)
+
+    def mkdir(self, dirname):
+        return self._base.mkdir(dirname)
+
     def _setattr_path_to(self, section):
         fn_name, top = Humus._fnname_and_top(section)
         fn = lambda resource: Humus._path_to(top, resource)

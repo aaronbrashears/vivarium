@@ -1,0 +1,10 @@
+first:
+  more:
+    file: contents
+    dir:
+      file1: hi
+      file2: there
+  less:
+    do: something, something, dark side.
+second:
+  nothing:

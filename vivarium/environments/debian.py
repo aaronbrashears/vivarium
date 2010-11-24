@@ -66,7 +66,7 @@ class Debian(Environment):
     def bootstrap(self):
         if self.root == '/':
             print("Targetting local host.")
-            raise NotImplemented, "Not implemeted yet for safety."
+            raise NotImplementedError, "Not implemeted yet for safety."
         if os.path.isdir(os.path.join(self.root, 'etc')):
             # *FIX: This is not even close to a thorough check. This
             # is just a useful shortcut at this early stage of

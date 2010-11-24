@@ -43,14 +43,18 @@ class YamlFS(object):
 
     def __init__(self, filename):
         self._filename = filename
-        self._fs = yaml.load(open(self._filename))
+        try:
+            self._fs = yaml.load(open(self._filename))
+        except IOError as exc:
+            if exc.errno == errno.ENOENT: self._fs = {}
+            else: raise
 
-    def open(self, filename, mode):
+    def open(self, filename, mode = 'r'):
         if filename.startswith('/'):
             filename = filename[1:]
         paths = filename.split('/')
         if mode == 'w':
-            self._mkdir(paths[:-1])
+            self.mkdirs(paths[:-1])
         rv = self._fs
         try:
             for part in paths[:-1]:
@@ -60,10 +64,19 @@ class YamlFS(object):
         # *NOTE: split out so we can handle new files.
         return YamlFS.File(rv, paths[-1], mode, self)
 
-    def _sync(self):
-        yaml.dump(self._fs, stream=open(self._filename, 'w'))
+    def list(self, dirname):
+        directory = self._descend_path(dirname)
+        return directory.keys()
 
-    def _mkdir(self, path):
+    def isfile(self, filename):
+        fl = self._descend_path(filename)
+        return isinstance(fl, basestring)
+
+    def isdir(self, dirname):
+        dr = self._descend_path(dirname)
+        return isinstance(dr, dict)
+
+    def mkdirs(self, path):
         step = self._fs
         for part in path:
             next = step.get(part, None)
@@ -72,4 +85,18 @@ class YamlFS(object):
                 next = step[part]
             step = next
             if isinstance(step, basestring):
-                raise OSError, 17
+                raise OSError, errno.EEXIST
+
+    def _descend_path(self, path):
+        paths = path.split('/')
+        paths = [path for path in paths if len(path) > 0]
+        node = self._fs
+        try:
+            for part in paths:
+                node = node[part]
+        except KeyError:
+            raise IOError, errno.ENOENT
+        return node
+
+    def _sync(self):
+        yaml.dump(self._fs, stream=open(self._filename, 'w'))

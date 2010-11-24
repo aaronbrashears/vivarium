@@ -516,19 +516,19 @@ class Environment(object):
         return False
 
     def bootstrap(self):
-        raise NotImplemented
+        raise NotImplementedError
 
     def download_package(self, package):
-        raise NotImplemented
+        raise NotImplementedError
 
     def install_package(self, package):
-        raise NotImplemented
+        raise NotImplementedError
 
     def run(self, command):
-        raise NotImplemented
+        raise NotImplementedError
 
     def work(self, callback, *args, **kwargs):
-        raise NotImplemented
+        raise NotImplementedError
 
     #
     # Utility methods

@@ -6,12 +6,27 @@ class FSFS(object):
         self._base = os.path.realpath(base)
 
     def open(self, filename, mode):
-        fullname = self._base + filename
+        fullname = self._fullname(filename)
         if mode == 'w':
-            FSFS._mkdir(os.path.dirname(fullname))
+            FSFS._mkdir(os.path.dirname(filename))
         elif mode != 'r':
             raise NotImplementedError, 'Please specify mode of r or w'
         return open(fullname, mode)
+
+    def list(self, dirname):
+        return os.listdir(self._fullname(dirname))
+
+    def isfile(self, filename):
+        return os.path.isfile(self._fullname(filename))
+
+    def isdir(self, dirname):
+        return os.path.isfile(self._fullname(dirname))
+
+    def mkdirs(self, dirname):
+        return os.path.mkdirs(self._fullname(dirname))
+
+    def _fullname(self, name):
+        return self._base + filename
 
     @staticmethod
     def _is_write(mode):
