@@ -8,7 +8,7 @@ class FSFS(object):
     def open(self, filename, mode):
         fullname = self._fullname(filename)
         if mode == 'w':
-            FSFS._mkdir(os.path.dirname(filename))
+            FSFS._mkdir(os.path.dirname(fullname))
         elif mode != 'r':
             raise NotImplementedError, 'Please specify mode of r or w'
         return open(fullname, mode)
@@ -26,7 +26,7 @@ class FSFS(object):
         return os.path.mkdirs(self._fullname(dirname))
 
     def _fullname(self, name):
-        return self._base + filename
+        return self._base + name
 
     @staticmethod
     def _is_write(mode):
