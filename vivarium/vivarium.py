@@ -44,7 +44,7 @@ class Entity(object):
 
 class File(object):
     def __init__(self):
-        self.destination = None
+        self.location = None
         self.owner = None
         self.group = None
         self.mode = None
@@ -55,7 +55,7 @@ class File(object):
     def from_source(self, source, filename):
         with source.open(source.path_to_file(filename)) as file_def:
             config = yaml.load(file_def.read())
-        self.destination = config['destination']
+        self.location = config['location']
         self.owner = config.get('owner', 'root')
         self.group = config.get('group', 'root')
         self.mode = config.get('mode', 'u=rw,go=r')
@@ -66,7 +66,7 @@ class File(object):
 
     def to_seed(self):
         seed = {}
-        seed['destination'] = self.destination
+        seed['location'] = self.location
         seed['owner'] = self.owner
         seed['group'] = self.group
         seed['mode'] = self.mode

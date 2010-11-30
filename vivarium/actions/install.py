@@ -130,7 +130,7 @@ class Install(Action):
             ctxt.number)
         ctxt.es.mkdir(self._dir)
         for fl in files:
-            # make sure we can write to the destination
+            # make sure we can write to the destination location
             filespec = ctxt.data['files'][fl]
             # print("{0}: {1}".format(fl, filespec))
             if 'content' in filespec:
@@ -140,7 +140,7 @@ class Install(Action):
                 content = str(tpl)
             filename = self._working_filename(fl)
             def _file_sow():
-                open(filespec['destination'], 'ab').close()
+                open(filespec['location'], 'ab').close()
                 with open(filename, 'w') as output:
                     output.write(content)
             ctxt.es.work(_file_sow)
@@ -149,7 +149,7 @@ class Install(Action):
         for fl in files:
             filespec = ctxt.data['files'][fl]
             src_filename = self._working_filename(fl)
-            dst_filename = filespec['destination']
+            dst_filename = filespec['location']
             def _file_plant():
                 with open(src_filename, 'rb') as src:
                     with open(dst_filename, 'wb') as dst:
