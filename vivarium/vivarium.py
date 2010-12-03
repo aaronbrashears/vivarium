@@ -320,7 +320,19 @@ class Target(object):
 def copy(args):
     source = humus.Humus(args.source)
     destination = humus.Humus(args.destination)
-    raise NotImplementedError
+    _recursive_copy('/', source, destination)
+
+def _recursive_copy(directory, src, dst):
+    dst.makedirs(directory)
+    contents = src.list(directory)
+    for content in contents:
+        node = os.path.join(directory, content)
+        if src.isfile(node):
+            with dst.open(node, 'w') as target:
+                src_content = src.open(node).read()
+                target.write(src_content)
+        elif src.isdir(node):
+            _recursive_copy(node, src, dst)
 
 def seed(args):
     spawn = humus.Humus(args.spawn)

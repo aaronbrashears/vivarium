@@ -54,7 +54,7 @@ class YamlFS(object):
             filename = filename[1:]
         paths = filename.split('/')
         if mode == 'w':
-            self.mkdirs(paths[:-1])
+            self._makedirs(paths[:-1])
         rv = self._fs
         try:
             for part in paths[:-1]:
@@ -76,9 +76,16 @@ class YamlFS(object):
         dr = self._descend_path(dirname)
         return isinstance(dr, dict)
 
-    def mkdirs(self, path):
+    def makedirs(self, dirname):
+        paths = dirname.split('/')
+        paths = [path for path in paths if len(path) > 0]
+        # print "PATH: {0}".format(paths)
+        return self._makedirs(paths)
+
+    def _makedirs(self, paths):
         step = self._fs
-        for part in path:
+        for part in paths:
+            # print "MKDIR: {0}".format(part)
             next = step.get(part, None)
             if next is None:
                 step[part] = {}
@@ -99,4 +106,5 @@ class YamlFS(object):
         return node
 
     def _sync(self):
+        # print "SYNC {0}".format(self._fs)
         yaml.dump(self._fs, stream=open(self._filename, 'w'))

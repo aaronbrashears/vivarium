@@ -69,11 +69,11 @@ def _copy_parser(subparsers, defaults):
     copy_parser = subparsers.add_parser(
         'copy', help='Copy a complete humus. NOT YET IMPLEMENTED.')
     copy_parser.add_argument(
-        'from',
+        'source',
         action='store',
         help='Source configuration to use. Can be yaml file or a directory.')
     copy_parser.add_argument(
-        'to',
+        'destination',
         action='store',
         help="""
 Destination for the copy. If the destination is a directory then the

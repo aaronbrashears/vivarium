@@ -101,11 +101,11 @@ def test_is_file_no_file_is_io_error():
             raise
     assert True
 
-def test_mkdirs():
+def test_makedirs():
     yaml_file = 'temp.yaml'
     yfs = YamlFS(fullname(yaml_file))
     dirs = '/foo/bar'
-    yfs.mkdirs(dirs)
+    yfs.makedirs(dirs)
     file_inside = dirs + '/baz'
     contents = 'contents'
     with yfs.open(file_inside, 'w') as fl:

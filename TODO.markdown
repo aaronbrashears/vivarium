@@ -2,9 +2,12 @@
 * Controllers to watch and take action based on actions taken.
 * Split ActionManager out of vivarium.py.
 * Split Ecosystem out of vivarium.py
-* Finish installing files.
+* Finish files.
+** Links.
+** Directories.
+** File non-existence.
+** File contents alternative to templates.
+* Use vivarium.File during for planting.
 * Implement installing gems.
 * Investigate installing eggs.
-* Implement humus copy.
 * More unit tests.
-* Use vivarium.File during for planting.
