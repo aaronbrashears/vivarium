@@ -18,6 +18,9 @@ class TargetCollisionError(Exception):
 class HostMismatch(Exception):
     pass
 
+class BadFilename(Exception):
+    pass
+
 class Entity(object):
     def __init__(self, *args, **kwargs):
         # print("Entity init {0}".format(kwargs))
@@ -42,36 +45,108 @@ class Entity(object):
             self._config = _merge_dicts(entity._config, self._config)
             seen.remove(include)
 
+class Enum(set):
+    """
+    Simple class to represent an enumeration. Really just a
+    maintenance communication to note that there is a limited set of
+    options for a value, what those options are, and to reduce typos.
+
+    Usage:
+    >>> animals = Enum('dog cat horse'.split())
+    >>> animals.cat == 'cat'
+    True
+    """
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError
+
 class File(object):
+    IS = Enum(['regular', 'dir', 'sym', 'hard', 'absent'])
+
     def __init__(self):
         self.location = None
+        self.type = None
         self.owner = None
         self.group = None
         self.mode = None
+
+        # *TODO consider only defining these in sub-classes.
         self._template = None
-        # *TODO: add content as an alternate to templates
-        # self._content = None
+        self._content = None
+        self._target = None
+        self._files = None
 
     def from_source(self, source, filename):
         with source.open(source.path_to_file(filename)) as file_def:
             config = yaml.load(file_def.read())
-        self.location = config['location']
-        self.owner = config.get('owner', 'root')
-        self.group = config.get('group', 'root')
-        self.mode = config.get('mode', 'u=rw,go=r')
-        template = config['template']
-        with source.open(source.path_to_template(template)) as contents:
-            self._template = contents.read()
-        return self
+        location = config['location']
+        return self._load_config(config, source, location)
 
     def to_seed(self):
         seed = {}
         seed['location'] = self.location
+        seed['type'] = self.type
         seed['owner'] = self.owner
         seed['group'] = self.group
         seed['mode'] = self.mode
-        seed['template'] = self._template
+        if self._template is not None:
+            seed['template'] = self._template
+        if self._content is not None:
+            seed['content'] = self._content
+        if self._target is not None:
+            seed['target'] = self._target
+        if self._files is not None:
+            seed['files'] = []
+            for node in self._files:
+                seed['files'].append(node.to_seed())
         return seed
+
+    def _load_config(self, config, source, location):
+        self.location = location
+        self.type = config.get('type', File.IS.regular)
+        self.owner = config.get('owner', None)#'root')
+        self.group = config.get('group', None)#'root')
+        self.mode = config.get('mode', None)#'u=rw,go=r')
+        if self.type == File.IS.regular:
+            self._load_regular(config, source)
+        elif self.type == File.IS.dir:
+            self._load_dir(config, source)
+        elif self.type == File.IS.absent:
+            # No further data to load
+            pass
+        elif self.type in (File.IS.hard, File.IS.sym):
+            self._target = config['target']
+        return self
+
+    def _load_regular(self, config, source):
+        def _load_content(representation):
+            rep = config.get(representation, None)
+            if rep is not None:
+                with source.open(source.path_to_template(rep)) as rep_file:
+                    setattr(self, '_' + representation, rep_file.read())
+                return True
+            return False
+        for representation in ['template', 'content']:
+            found = _load_content(representation)
+            if found: break
+        if not found:
+            self._content = ''
+
+    def _load_dir(self, config, source):
+        self._files = []
+        files = config.get('files', None)
+        for sub, node in files.iteritems():
+            if '/' in sub:
+                raise BadFilename, "File in directory cannot contain '/'."
+            location = os.path.join(self.location, sub)
+            if isinstance(node, basestring):
+                with source.open(source.path_to_file(node)) as file_def:
+                    file_config = yaml.load(file_def.read())
+                fl = File()._load_config(file_config, source, location)
+            else:
+                fl = File()._load_config(node, source, location)
+            self._files.append(fl)
 
 class Role(Entity):
     def __init__(self, *args, **kwargs):
@@ -186,7 +261,7 @@ class Host(Entity):
         targets = self._find_targets(source)
         # for key, value in targets.iteritems():
         #     print("Target: {0} -- {1}".format(key, value.to_seed()))
-        self.stages = self._build_stages(targets)
+        self.stages = Host._build_stages(targets)
         return self
 
     def _find_targets(self, source):
@@ -212,7 +287,8 @@ class Host(Entity):
             target_in.update(dict([(key, rolename) for key in new_targets]))
         return targets
 
-    def _build_stages(self, targets):
+    @staticmethod
+    def _build_stages(targets):
         # iterate over the targets and let them prep themselves for the spawn
         deps = {}
         for targetname, target in targets.iteritems():
@@ -344,15 +420,15 @@ def seed(args):
     except IOError:
         print("Unable to source host {0}".format(args.host))
         raise
-    seed = host.to_seed()
+    the_seed = host.to_seed()
     if args.stdout:
         msg = "Configuration for {0}:".format(args.host)
         print(msg)
         print("="*len(msg))
         import pprint
-        pprint.pprint(seed)
+        pprint.pprint(the_seed)
     else:
-        serialized = yaml.dump(seed)
+        serialized = yaml.dump(the_seed)
         with spawn.open(spawn.path_to_seed(args.host), 'w') as dest:
             dest.write(serialized)
 
@@ -378,17 +454,17 @@ def _domainname(name):
     return '.'.join(name.split('.')[1:])
 
 def _is_dict_like(obj, require_set=False):
-     """
-     Returns ``True`` if an object appears to support the python dict
-     operations. For my purposes, this means ``obj`` implements
-     ``__getitem__`` and ``keys``.
- 
-     If ``require_set`` is ``True`` then the object must also support
-     ``__setitem__``.
-     """
-     if require_set and not hasattr(obj, '__setitem__'): return False
-     if hasattr(obj, 'keys') and hasattr(obj, '__getitem__'): return True
-     else: return False
+    """
+    Returns ``True`` if an object appears to support the python dict
+    operations. For my purposes, this means ``obj`` implements
+    ``__getitem__`` and ``keys``.
+
+    If ``require_set`` is ``True`` then the object must also support
+    ``__setitem__``.
+    """
+    if require_set and not hasattr(obj, '__setitem__'): return False
+    if hasattr(obj, 'keys') and hasattr(obj, '__getitem__'): return True
+    else: return False
 
 def _safe_merge_dicts(lesser, greater):
     if lesser is None: return greater
@@ -437,7 +513,7 @@ def _topological_sort(deps):
         if not ordered:
             break
         yield sorted(ordered)
-        deps = dict([(item, (dep - ordered)) for item,dep in deps.items()
+        deps = dict([(item, (dep - ordered)) for item, dep in deps.items()
                      if item not in ordered])
     if deps:
         raise CircularDependencyError, deps

@@ -135,7 +135,7 @@ class Install(Action):
             # print("{0}: {1}".format(fl, filespec))
             if 'content' in filespec:
                 content = filespec['content']
-            else:
+            elif 'template' in filespec:
                 tpl = Template(filespec['template'], searchList=[ctxt.env])
                 content = str(tpl)
             filename = self._working_filename(fl)
