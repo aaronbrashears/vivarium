@@ -2,7 +2,6 @@
 files:
   etc.hosts: |
     location: /etc/hosts
-    type: regular
     owner: root
     group: root
     mode: u=rw,go=r
@@ -11,20 +10,17 @@ files:
     location: /etc/defaults
   etc.absent: |
     location: /etc/absent
-    type: absent
+    absent: ~
   etc.apache.mods.enabled: |
     location: /etc/apache2/modules-enabled
-    type: dir
     owner: root
     group: root
     mode: u=rw,go=r
     files:
       proxy.load:
-        type: sym
         target: ../modules-available/proxy.load
   etc.apache.mods.available: |
     location: /etc/apache2/modules-available
-    type: dir
     owner: root
     group: root
     mode: u=rw,go=r

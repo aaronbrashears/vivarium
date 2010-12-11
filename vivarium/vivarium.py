@@ -104,34 +104,45 @@ class File(object):
 
     def _load_config(self, config, source, location):
         self.location = location
-        self.type = config.get('type', File.IS.regular)
         self.owner = config.get('owner', None)#'root')
         self.group = config.get('group', None)#'root')
         self.mode = config.get('mode', None)#'u=rw,go=r')
-        if self.type == File.IS.regular:
-            self._load_regular(config, source)
-        elif self.type == File.IS.dir:
-            self._load_dir(config, source)
-        elif self.type == File.IS.absent:
-            # No further data to load
-            pass
-        elif self.type in (File.IS.hard, File.IS.sym):
-            self._target = config['target']
-        return self
 
-    def _load_regular(self, config, source):
-        def _load_content(representation):
-            rep = config.get(representation, None)
-            if rep is not None:
-                with source.open(source.path_to_template(rep)) as rep_file:
-                    setattr(self, '_' + representation, rep_file.read())
-                return True
-            return False
-        for representation in ['template', 'content']:
-            found = _load_content(representation)
-            if found: break
-        if not found:
+        # make sure there is only 1 type.
+        markers = set(['template', 'content', 'target', 'absent', 'files'])
+        keys = set(config.keys())
+        cats = markers.intersection(keys)
+        if len(cats) > 1:
+            msg = "Multiple possible file types for '{0}': {1}"
+            raise RuntimeError, msg.format(location, cats)
+        if len(cats) == 0:
+            self.type = File.IS.regular
             self._content = ''
+            return self
+        cat = cats.pop()
+        if cat == 'template':
+            self.type = File.IS.regular
+            with source.open(source.path_to_template(config[cat])) as rep_file:
+                self._template = rep_file.read()
+        elif cat == 'content':
+            self.type = File.IS.regular
+            with source.open(source.path_to_template(config[cat])) as rep_file:
+                self._content = rep_file.read()
+        elif cat == 'files':
+            self.type = File.IS.dir
+            self._load_dir(config, source)
+        elif cat == 'absent':
+            self.type = File.IS.absent
+        elif cat == 'target':
+            if config.has_key('hard'):
+                self.type = File.IS.hard
+            else:
+                self.type = File.IS.sym
+            self._target = config['target']
+        else:
+            msg = 'Unable to infer file type: {0}'
+            raise RuntimeError, msg.format(location)
+        return self
 
     def _load_dir(self, config, source):
         self._files = []
