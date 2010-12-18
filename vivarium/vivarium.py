@@ -1,6 +1,10 @@
+from Cheetah.Template import Template
 from copy import deepcopy
 import errno
+import grp
 import os.path
+import pwd
+import shutil
 import sys
 import yaml
 
@@ -83,13 +87,41 @@ class File(object):
         location = config['location']
         return self._load_config(config, source, location)
 
+    def from_seed(self, seed):
+        self.location = seed['location']
+        self.type = seed['type']
+        self.owner = seed.get('owner', None)
+        self.group = seed.get('group', None)
+        self.mode = seed.get('mode', None)
+        if self.type == File.IS.regular:
+            try:
+                self._template = seed['template']
+            except KeyError:
+                self._content = seed['content']
+        elif self.type in (File.IS.sym, File.IS.hard):
+            self._target = seed['target']
+        elif self.type == File.IS.dir:
+            self._files = {}
+            for sub, fl in seed['files'].iteritems():
+                file_def = File().from_seed(fl)
+                self._files[sub] = file_def
+        elif self.type is File.absent:
+            pass
+        else:
+            msg = "Unkown file type: {0}"
+            raise RuntimeError, msg.format(self.type)
+        return self
+
     def to_seed(self):
         seed = {}
         seed['location'] = self.location
         seed['type'] = self.type
-        seed['owner'] = self.owner
-        seed['group'] = self.group
-        seed['mode'] = self.mode
+        if self.owner is not None:
+            seed['owner'] = self.owner
+        if self.group is not None:
+            seed['group'] = self.group
+        if self.mode is not None:
+            seed['mode'] = self.mode
         if self._template is not None:
             seed['template'] = self._template
         if self._content is not None:
@@ -97,10 +129,102 @@ class File(object):
         if self._target is not None:
             seed['target'] = self._target
         if self._files is not None:
-            seed['files'] = []
-            for node in self._files:
-                seed['files'].append(node.to_seed())
+            seed['files'] = {}
+            for sub, node in self._files.iteritems():
+                seed['files'][sub] = node.to_seed()
         return seed
+
+    def sow(self, filename, ctxt):
+        if self.type == File.IS.regular:
+            self._sow_regular(filename, ctxt)
+        elif self.type == File.IS.dir:
+            self._sow_dir(filename, ctxt)
+
+    def plant(self, src_filename, dst_filename, ctxt):
+        def _remove(name):
+            if os.path.islink(name) or os.path.isfile(name):
+                os.unlink(name)
+            elif os.path.isdir(name):
+                shutil.rmtree(name)
+            elif os.path.exists(name):
+                msg = "Path is unknown type: {0}"
+                raise RuntimeError, msg.format(name)
+        def _finalize_file(location, uid, gid, mode):
+            # print("finalize file {0}".format(location))
+            if uid > -1 or gid > -1:
+                os.chown(location, uid, gid)
+            if mode is not None:
+                os.chmod(location, mode)
+        def _finalize_link(location, uid, gid, mode):
+            # print("finalize link {0}".format(location))
+            if uid > -1 or gid > -1:
+                os.lchown(location, uid, gid)
+            if mode is not None:
+                os.lchmod(location, mode)
+        def _inner_plant(node):
+            uid, gid = node._uid_gid_owner()
+            mode = node._file_mode()
+            if node.type == File.IS.regular:
+                _finalize_file(node.location, uid, gid, mode)
+            elif node.type == File.IS.dir:
+                for name, fl in node._files.iteritems():
+                    _inner_plant(fl)
+                _finalize_file(node.location, uid, gid, mode)
+                # fd = os.open(node.location, os.O_DIRECTORY | os.O_RDWR)
+                # node._chown(fd)
+                # node._chmod(fd)
+                # os.close(fd)
+            elif node.type == File.IS.sym:
+                os.symlink(node._target, node.location)
+                _finalize_link(node.location, uid, gid, mode)
+            elif node.type == File.IS.hard:
+                os.link(node._target, node.location)
+                _finalize_link(node.location, uid, gid, mode)
+            elif node.type == File.IS.absent:
+                _remove(node.location)
+        def _plant_dir(node, src_fname, dst_fname):
+            # print("remove dir: {0}".format(dst_fname)
+            _remove(dst_fname)
+            # print "copy dir: {0} {1}".format(src_fname, dst_fname))
+            shutil.copytree(src_fname, dst_fname, symlinks=True)
+            _inner_plant(node)
+        def _plant_file(node, src_fname, dst_fname):
+            with open(src_fname, 'rb') as src:
+                with open(dst_fname, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+            uid, gid = node._uid_gid_owner()
+            mode = node._file_mode()
+            _finalize_file(node.location, uid, gid, mode)
+        if self.type == File.IS.regular:
+            ctxt.es.work(_plant_file, self, src_filename, dst_filename)
+        elif self.type == File.IS.dir:
+            ctxt.es.work(_plant_dir, self, src_filename, dst_filename)
+        else:
+            ctxt.es.work(_inner_plant, self)
+
+    def _sow_regular(self, filename, ctxt):
+        if self._content is not None:
+            content = self._content
+        else:
+            tpl = Template(self._template, searchList=[ctxt.env])
+            content = str(tpl)
+        def _file_sow():
+            # attempt to write to the file to get an IOError
+            # if that will fail.
+            # Naw, we should always be root and checking for
+            # writeable differs between file types as well as
+            # where they are in the tree. Do this later when we
+            # determine that it is needed. 2010-12-13 Aaron
+            #open(self.location, 'ab').close()
+            with open(filename, 'w') as output:
+                output.write(content)
+        ctxt.es.work(_file_sow)
+
+    def _sow_dir(self, filename, ctxt):
+        ctxt.es.mkdir(filename)
+        for sub, fl in self._files.iteritems():
+            subname = os.path.join(filename, sub)
+            fl.sow(subname, ctxt)
 
     def _load_config(self, config, source, location):
         self.location = location
@@ -145,7 +269,7 @@ class File(object):
         return self
 
     def _load_dir(self, config, source):
-        self._files = []
+        self._files = {}
         files = config.get('files', None)
         for sub, node in files.iteritems():
             if '/' in sub:
@@ -157,7 +281,53 @@ class File(object):
                 fl = File()._load_config(file_config, source, location)
             else:
                 fl = File()._load_config(node, source, location)
-            self._files.append(fl)
+            self._files[sub] = fl
+
+    @staticmethod
+    def _is_int(mode_string):
+        try:
+            int(mode_string)
+            return True
+        except ValueError:
+            pass
+        return False
+
+    @staticmethod
+    def _parse_mode(mode_string):
+        modes = mode_string.split(',')
+        mode_bits = 0
+        for mode in modes:
+            affected, value = mode.split('=')
+            mask = 0
+            if 'u' in affected: mask |= 0b100111000000
+            if 'g' in affected: mask |= 0b010000111000
+            if 'o' in affected: mask |= 0b001000000111
+            if 'a' in affected: mask |= 0b111111111111
+            perm = 0
+            if 'r' in value: perm |= 0b000100100100
+            if 'w' in value: perm |= 0b000010010010
+            if 'x' in value: perm |= 0b000001001001
+            if 's' in value: perm |= 0b111000000000
+            mode_bits |= (mask & perm)
+        return mode_bits
+
+    def _uid_gid_owner(self):
+        uid = -1
+        gid = -1
+        if self.owner is not None:
+            uid = pwd.getpwnam(self.owner)[2]
+        if self.group is not None:
+            gid = grp.getgrnam(self.group)[2]
+        return uid, gid
+
+    def _file_mode(self):
+        mode = None
+        if self.mode is not None:
+            if File._is_int(self.mode):
+                mode = string.atoi(self.mode, base=8)
+            else:
+                mode = File._parse_mode(self.mode)
+        return mode
 
 class Role(Entity):
     def __init__(self, *args, **kwargs):
@@ -633,6 +803,7 @@ class Environment(object):
     # Utility methods
     #
     def mkdir(self, subdir):
+        # print("******** MKDIR".format(subdir))
         path = self._filename(subdir)
         try:
             os.makedirs(path)
@@ -640,9 +811,9 @@ class Environment(object):
             if exc.errno == errno.EEXIST: pass
             else: raise
 
-    def open(self, filename, mode):
-        fullname = self._filename(filename)
-        return open(fullname, mode)
+    # def open(self, filename, mode):
+    #     fullname = self._filename(filename)
+    #     return open(fullname, mode)
 
     def _filename(self, name):
         if name.startswith('/') and self.root != '/':

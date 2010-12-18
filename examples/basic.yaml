@@ -1,5 +1,17 @@
 ---
 files:
+  etc:
+    apache2:
+      modules-enabled: |
+        location: /etc/apache2/mods-enabled
+        files:
+          proxy.load: { 'target' : '../mods-available/proxy.load' }
+          proxy.conf: { 'target' : '../mods-available/proxy.conf' }
+      sites-enabled: |
+        location: /etc/apache2/sites-enabled
+        files:
+          default: { 'target' : '../sites-available/default' }
+          default-ssl: { 'target' : '../sites-available/default-ssl' }
   etc.hosts: |
     location: /etc/hosts
     owner: root
@@ -32,6 +44,10 @@ roles:
         steps:
           - action: install
             packages: [apache2, libapache2-mod-proxy-html]
+          - action: install
+            files:
+              - /etc/apache2/modules-enabled
+              - /etc/apache2/sites-enabled
         depends: [ basic-host ]
 # Proposed alternate syntax:
 #       actions:[ 'install(packages=[apache, libapache2-mod-proxy-html])' ]

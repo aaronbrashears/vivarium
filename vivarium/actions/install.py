@@ -1,9 +1,5 @@
-from Cheetah.Template import Template
 from copy import deepcopy
-import grp
 import os.path
-import pwd
-import shutil
 import stat
 import string
 
@@ -69,60 +65,6 @@ class Install(Action):
     def _working_filename(self, name):
         return os.path.join(self._dir, name.replace('/','%'))
 
-    @staticmethod
-    def _is_int(mode_string):
-        try:
-            int(mode_string)
-            return True
-        except ValueError:
-            pass
-        return False
-
-    @staticmethod
-    def _parse_mode(mode_string):
-        modes = mode_string.split(',')
-        mode_bits = 0
-        for mode in modes:
-            affected, value = mode.split('=')
-            mask = 0
-            if 'u' in affected: mask |= 0b100111000000
-            if 'g' in affected: mask |= 0b010000111000
-            if 'o' in affected: mask |= 0b001000000111
-            if 'a' in affected: mask |= 0b111111111111
-            perm = 0
-            if 'r' in value: perm |= 0b000100100100
-            if 'w' in value: perm |= 0b000010010010
-            if 'x' in value: perm |= 0b000001001001
-            if 's' in value: perm |= 0b111000000000
-            mode_bits |= (mask & perm)
-        return mode_bits
-
-    @staticmethod
-    def _chown(fd, filespec):
-        # *NOTE: This method should be moved to the the ecosystem
-        # since the owner and group are potentially different in a
-        # chroot environment. 2010-11-21 AB
-        uid = -1
-        gid = -1
-        owner = filespec.get('owner', None)
-        group = filespec.get('group', None)
-        if owner:
-            uid = pwd.getpwnam(owner)[2]
-        if group:
-            gid = grp.getgrnam(group)[2]
-        if owner or group:
-            os.fchown(fd, uid, gid)
-
-    @staticmethod
-    def _chmod(fd, filespec):
-        if filespec.has_key('mode'):
-            mode = filespec['mode']
-            if Install._is_int(mode):
-                mode = string.atoi(mode, base=8)
-            else:
-                mode = Install._parse_mode(mode)
-            os.fchmod(fd, mode)
-
     def _sow_files(self, files, ctxt):
         self._dir = self._work_dir(
             ctxt.args.stage_dir,
@@ -130,34 +72,20 @@ class Install(Action):
             ctxt.number)
         ctxt.es.mkdir(self._dir)
         for fl in files:
-            # make sure we can write to the destination location
             filespec = ctxt.data['files'][fl]
-            # print("{0}: {1}".format(fl, filespec))
-            if 'content' in filespec:
-                content = filespec['content']
-            elif 'template' in filespec:
-                tpl = Template(filespec['template'], searchList=[ctxt.env])
-                content = str(tpl)
+            # print("_sow_files: {0} - {1}".format(fl, filespec))
+            thefile = File().from_seed(filespec)
             filename = self._working_filename(fl)
-            def _file_sow():
-                open(filespec['location'], 'ab').close()
-                with open(filename, 'w') as output:
-                    output.write(content)
-            ctxt.es.work(_file_sow)
+            thefile.sow(filename, ctxt)
 
     def _plant_files(self,  files, ctxt):
         for fl in files:
             filespec = ctxt.data['files'][fl]
+            thefile = File().from_seed(filespec)
             src_filename = self._working_filename(fl)
             dst_filename = filespec['location']
-            def _file_plant():
-                with open(src_filename, 'rb') as src:
-                    with open(dst_filename, 'wb') as dst:
-                        shutil.copyfileobj(src, dst)
-                        fd = dst.fileno()
-                        Install._chown(fd, filespec)
-                        Install._chmod(fd, filespec)
-            ctxt.es.work(_file_plant)
+            # print("PLANTFILES: {0} {1}".format(src_filename,dst_filename))
+            thefile.plant(src_filename, dst_filename, ctxt)
 
     def _reap_files(self, files, ctxt):
         # *TODO: clean up intermediary files and directories.
@@ -165,10 +93,22 @@ class Install(Action):
 
     def _sow_packages(self, packages, ctxt):
         for package in packages:
+            # in a chroot, a lot of the package installs fail because
+            # start/stop fails. Not sure how to resolve
+            # this. 2010-12-11 Aaron
+            # if not ctxt.es.download_package(package):
+            #     msg = "Unable to fetch package: {0}"
+            #     raise RuntimeError, msg.format(package)
             ctxt.es.download_package(package)
 
     def _plant_packages(self, packages, ctxt):
         for package in packages:
+            # in a chroot, a lot of the package installs fail because
+            # start/stop fails. Not sure how to resolve
+            # this. 2010-12-11 Aaron
+            # if not ctxt.es.install_package(package):
+            #     msg = "Unable to install package: {0}"
+            #     raise RuntimeError, msg.format(package)
             ctxt.es.install_package(package)
 
     def _reap_packages(self, packages, ctxt):
