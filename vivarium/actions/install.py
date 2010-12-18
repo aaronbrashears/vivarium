@@ -20,8 +20,8 @@ class Install(Action):
         rv = {}
         files = {}
         for filename in parameters.get('files', []):
-            the_file = File().from_source(source, filename)
-            files[filename] = the_file.to_seed()
+            vvfile = File().from_source(source, filename)
+            files[filename] = vvfile.to_seed()
         rv['files'] = files
         return rv
 
@@ -71,21 +71,21 @@ class Install(Action):
             ctxt.target_name,
             ctxt.number)
         ctxt.es.mkdir(self._dir)
-        for fl in files:
-            filespec = ctxt.data['files'][fl]
-            # print("_sow_files: {0} - {1}".format(fl, filespec))
-            thefile = File().from_seed(filespec)
-            filename = self._working_filename(fl)
-            thefile.sow(filename, ctxt)
+        for file_def in files:
+            filespec = ctxt.data['files'][file_def]
+            # print("_sow_files: {0} - {1}".format(file_def, filespec))
+            vvfile = File().from_seed(filespec)
+            filename = self._working_filename(file_def)
+            vvfile.sow(filename, ctxt)
 
     def _plant_files(self,  files, ctxt):
-        for fl in files:
-            filespec = ctxt.data['files'][fl]
-            thefile = File().from_seed(filespec)
-            src_filename = self._working_filename(fl)
+        for file_def in files:
+            filespec = ctxt.data['files'][file_def]
+            vvfile = File().from_seed(filespec)
+            src_filename = self._working_filename(file_def)
             dst_filename = filespec['location']
             # print("PLANTFILES: {0} {1}".format(src_filename,dst_filename))
-            thefile.plant(src_filename, dst_filename, ctxt)
+            vvfile.plant(src_filename, dst_filename, ctxt)
 
     def _reap_files(self, files, ctxt):
         # *TODO: clean up intermediary files and directories.

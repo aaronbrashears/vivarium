@@ -166,8 +166,8 @@ class File(object):
             if node.type == File.IS.regular:
                 _finalize_file(node.location, uid, gid, mode)
             elif node.type == File.IS.dir:
-                for file_def in node._files:
-                    _inner_plant(file_def)
+                for vvfile in node._files:
+                    _inner_plant(vvfile)
                 _finalize_file(node.location, uid, gid, mode)
                 # fd = os.open(node.location, os.O_DIRECTORY | os.O_RDWR)
                 # node._chown(fd)
@@ -276,10 +276,10 @@ class File(object):
             if isinstance(node, basestring):
                 with source.open(source.path_to_file(node)) as file_def:
                     file_config = yaml.load(file_def.read())
-                fl = File()._load_config(file_config, source, location)
+                vvfile = File()._load_config(file_config, source, location)
             else:
-                fl = File()._load_config(node, source, location)
-            self._files.append(fl)
+                vvfile = File()._load_config(node, source, location)
+            self._files.append(vvfile)
 
     @staticmethod
     def _is_int(mode_string):
