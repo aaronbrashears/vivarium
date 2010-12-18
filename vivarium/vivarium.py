@@ -101,10 +101,9 @@ class File(object):
         elif self.type in (File.IS.sym, File.IS.hard):
             self._target = seed['target']
         elif self.type == File.IS.dir:
-            self._files = {}
-            for sub, fl in seed['files'].iteritems():
-                file_def = File().from_seed(fl)
-                self._files[sub] = file_def
+            self._files = []
+            for file_def in seed['files']:
+                self._files.append(File().from_seed(file_def))
         elif self.type is File.absent:
             pass
         else:
@@ -129,9 +128,9 @@ class File(object):
         if self._target is not None:
             seed['target'] = self._target
         if self._files is not None:
-            seed['files'] = {}
-            for sub, node in self._files.iteritems():
-                seed['files'][sub] = node.to_seed()
+            seed['files'] = []
+            for node in self._files:
+                seed['files'].append(node.to_seed())
         return seed
 
     def sow(self, filename, ctxt):
@@ -167,8 +166,8 @@ class File(object):
             if node.type == File.IS.regular:
                 _finalize_file(node.location, uid, gid, mode)
             elif node.type == File.IS.dir:
-                for name, fl in node._files.iteritems():
-                    _inner_plant(fl)
+                for file_def in node._files:
+                    _inner_plant(file_def)
                 _finalize_file(node.location, uid, gid, mode)
                 # fd = os.open(node.location, os.O_DIRECTORY | os.O_RDWR)
                 # node._chown(fd)
@@ -222,9 +221,8 @@ class File(object):
 
     def _sow_dir(self, filename, ctxt):
         ctxt.es.mkdir(filename)
-        for sub, fl in self._files.iteritems():
-            subname = os.path.join(filename, sub)
-            fl.sow(subname, ctxt)
+        for node in self._files:
+            node.sow(node.location, ctxt)
 
     def _load_config(self, config, source, location):
         self.location = location
@@ -269,7 +267,7 @@ class File(object):
         return self
 
     def _load_dir(self, config, source):
-        self._files = {}
+        self._files = []
         files = config.get('files', None)
         for sub, node in files.iteritems():
             if '/' in sub:
@@ -281,7 +279,7 @@ class File(object):
                 fl = File()._load_config(file_config, source, location)
             else:
                 fl = File()._load_config(node, source, location)
-            self._files[sub] = fl
+            self._files.append(fl)
 
     @staticmethod
     def _is_int(mode_string):
