@@ -63,7 +63,7 @@ class Enum(set):
     def __getattr__(self, name):
         if name in self:
             return name
-        raise AttributeError
+        raise AttributeError, "Enumeration not found: {0}".format(name)
 
 class File(object):
     IS = Enum(['regular', 'dir', 'sym', 'hard', 'absent'])
