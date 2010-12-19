@@ -1,4 +1,8 @@
 ---
+contents:
+  basic:
+    etc.hosts: etc.hosts.content
+  apache.proxy.load: apache.proxy.load.content
 files:
   etc.hosts: |
     location: /etc/hosts
@@ -29,7 +33,3 @@ files:
   apache.proxy.load: |
     location: /this/is/ignored
     content: apache.proxy.load
-templates:
-  basic:
-    etc.hosts: etc.hosts.content
-  apache.proxy.load: apache.proxy.load.content

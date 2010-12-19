@@ -245,11 +245,11 @@ class File(object):
             return self
         if cat == 'template':
             self.type = File.IS.regular
-            with source.open(source.path_to_template(config[cat])) as rep_file:
+            with source.open(source.path_to_content(config[cat])) as rep_file:
                 self._template = rep_file.read()
         elif cat == 'content':
             self.type = File.IS.regular
-            with source.open(source.path_to_template(config[cat])) as rep_file:
+            with source.open(source.path_to_content(config[cat])) as rep_file:
                 self._content = rep_file.read()
         elif cat == 'files':
             self.type = File.IS.dir
