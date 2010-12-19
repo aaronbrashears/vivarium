@@ -237,11 +237,12 @@ class File(object):
         if len(cats) > 1:
             msg = "Multiple possible file types for '{0}': {1}"
             raise RuntimeError, msg.format(location, cats)
-        if len(cats) == 0:
+        try:
+            cat = cats.pop()
+        except KeyError:
             self.type = File.IS.regular
             self._content = ''
             return self
-        cat = cats.pop()
         if cat == 'template':
             self.type = File.IS.regular
             with source.open(source.path_to_template(config[cat])) as rep_file:
