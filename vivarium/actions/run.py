@@ -15,6 +15,6 @@ class Run(Action):
 
     def plant(self, ctxt):
         print("Run: planting step {0}".format(ctxt.number))
-        if ctxt.run(ctxt.params['command']) == 0:
+        if ctxt.es.run(ctxt.params['command']) == 0:
             return True
         return False

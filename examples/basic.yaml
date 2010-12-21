@@ -12,6 +12,16 @@ contents:
       ff02::1 ip6-allnodes
       ff02::2 ip6-allrouters
       ff02::3 ip6-allhosts
+    apt:
+      sources: |
+        deb http://us.archive.ubuntu.com/ubuntu/ lucid main restricted
+        deb-src http://us.archive.ubuntu.com/ubuntu/ lucid main restricted
+        deb http://us.archive.ubuntu.com/ubuntu/ lucid-updates main restricted
+        deb-src http://us.archive.ubuntu.com/ubuntu/ lucid-updates main restricted
+        deb http://us.archive.ubuntu.com/ubuntu/ lucid universe
+        deb-src http://us.archive.ubuntu.com/ubuntu/ lucid universe
+        deb http://us.archive.ubuntu.com/ubuntu/ lucid-updates universe
+        deb-src http://us.archive.ubuntu.com/ubuntu/ lucid-updates universe
 files:
   etc:
     apache2:
@@ -25,6 +35,12 @@ files:
         files:
           default: { 'target' : '../sites-available/default' }
           default-ssl: { 'target' : '../sites-available/default-ssl' }
+    apt.sources: |
+      location: /etc/apt/sources.list
+      owner: root
+      group: root
+      mode: u=rw,go=r
+      content: /basic/apt/sources
   etc.hosts: |
     location: /etc/hosts
     owner: root
@@ -49,8 +65,29 @@ hosts:
         includes: [ /basic.host ]
         roles:
           www: ~
+  com:
+    example:
+      office:
+        gonzo: |
+          roles:
+            dev: ~
 presence:
 roles:
+  dev: |
+    targets:
+      universe:
+        steps:
+          - action: install
+            files: [ /etc/apt.sources ]
+          - action: run
+            command: [ aptitude, update ]
+      ruby-dev:
+        depends: [ universe ]
+        steps:
+          - action: install
+            packages: [ rubygems ]
+          - action: install
+            gems: [ rake ]
   www: |
     targets:
       apache:

@@ -10,7 +10,7 @@ def register(actions):
     actions['install'] = Install
 
 class Install(Action):
-    _installables = ['files', 'packages']
+    _installables = ['files', 'packages', 'gems']
 
     def __init__(self, *args, **kwargs):
         super(Install, self).__init__(*args, **kwargs)
@@ -93,24 +93,37 @@ class Install(Action):
 
     def _sow_packages(self, packages, ctxt):
         for package in packages:
+            cmd = ['aptitude','install','--download-only', package]
             # in a chroot, a lot of the package installs fail because
             # start/stop fails. Not sure how to resolve
             # this. 2010-12-11 Aaron
-            # if not ctxt.es.download_package(package):
+            # if not ctxt.es.run(cmd)
             #     msg = "Unable to fetch package: {0}"
             #     raise RuntimeError, msg.format(package)
-            ctxt.es.download_package(package)
+            ctxt.es.run(cmd)
 
     def _plant_packages(self, packages, ctxt):
         for package in packages:
+            cmd = ['aptitude','install', package]
             # in a chroot, a lot of the package installs fail because
             # start/stop fails. Not sure how to resolve
             # this. 2010-12-11 Aaron
-            # if not ctxt.es.install_package(package):
+            # if not ctxt.es.run(cmd)
             #     msg = "Unable to install package: {0}"
             #     raise RuntimeError, msg.format(package)
-            ctxt.es.install_package(package)
+            ctxt.es.run(cmd)
 
     def _reap_packages(self, packages, ctxt):
         # *TODO: remove the package archive
+        pass
+
+    def _sow_gems(self, gems, ctxt):
+        pass
+
+    def _plant_gems(self, gems, ctxt):
+        for gem in gems:
+            cmd = ['gem','install', gem]
+            ctxt.es.run(cmd)
+
+    def _reap_gems(self, packages, ctxt):
         pass

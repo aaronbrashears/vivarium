@@ -6,6 +6,7 @@ import os.path
 import pwd
 import shutil
 import sys
+import subprocess
 import yaml
 
 import humus
@@ -615,8 +616,9 @@ def seed(args):
 def plant(args):
     spawn = humus.Humus(args.spawn)
     host = Host(name=args.host).from_spawn(spawn)
-    es = Ecosystem().es(args=args)
-    es.bootstrap()
+    es = Ecosystem(args.root_dir)
+    if args.root_dir != '/':
+        petri = PetriDish().culture(args=args).bootstrap()
     default_env = {'HOST' :
                    {'FQDN': args.host,
                     'SHORT': _shortname(args.host),
@@ -768,61 +770,71 @@ class ActionManager(object):
     def action(self, name, *args, **kwargs):
         return self._actions[name](*args, **kwargs)
 
-class Environment(object):
-    def __init__(self, *args, **kwargs):
-        self.root = None
-        self.args = kwargs.get('args', None)
-        if self.args is not None:
-            self.root = self.args.root_dir
-            if not self.root.startswith('/'):
-                self.root = os.path.realpath(self.root)
+def jailed(worker):
+    # Decorator for the Ecosystem class to make sure functionality
+    # runs inside the ecosystem.
+    def in_jail(*args,**kwargs):
+        real_root = args[0]._enter_jail()
+        try:
+            worker(*args,**kwargs)
+        finally:
+            args[0]._escape_jail(real_root)
+    return in_jail
 
-    #
-    # Abstract interface
-    #
-    def is_viable(self):
-        return False
+class Ecosystem(object):
+    def __init__(self, root_dir):
+        self._root_dir = root_dir
+        if not self._root_dir.startswith('/'):
+            self._root_dir = os.path.realpath(self._root_dir)
+        self._is_jailed = False
 
-    def bootstrap(self):
-        raise NotImplementedError
-
-    def download_package(self, package):
-        raise NotImplementedError
-
-    def install_package(self, package):
-        raise NotImplementedError
-
+    @jailed
     def run(self, command):
-        raise NotImplementedError
+        # print("run: {0}".format(command))
+        return subprocess.call(command)
 
-    def work(self, callback, *args, **kwargs):
-        raise NotImplementedError
+    @jailed
+    def work(self, fn, *args, **kwargs):
+        return fn(*args, **kwargs)
 
-    #
-    # Utility methods
-    #
+    @jailed
     def mkdir(self, subdir):
         # print("******** MKDIR".format(subdir))
-        path = self._filename(subdir)
         try:
-            os.makedirs(path)
+            os.makedirs(subdir)
         except OSError as exc:
             if exc.errno == errno.EEXIST: pass
             else: raise
 
-    # def open(self, filename, mode):
-    #     fullname = self._filename(filename)
-    #     return open(fullname, mode)
+    def _enter_jail(self):
+        """
+        Go into jail if necessary. Returns an open file handle if that
+        happened. Return None if no jail. This should only be called
+        by the ``jailed`` decorator since this is a potentially
+        destructive call with massive side effects.
+        """
+        if self._root_dir != '/' and not self._is_jailed:
+            self._is_jailed = True
+            real_root = os.open('/', os.O_RDONLY)
+            os.chroot(self._root_dir)
+            return real_root
 
-    def _filename(self, name):
-        if name.startswith('/') and self.root != '/':
-            name = name[1:]
-        return os.path.join(self.root, name)
+    def _escape_jail(self, real_root):
+        """
+        Escape from jail if real_root is provided and not None. This
+        should always be called with the reutrn value of
+        ``enter_jail`` and only called from the ``jailed`` decorator.
+        """
+        if real_root is not None:
+            os.fchdir(real_root)
+            os.chroot(".")
+            os.close(real_root)
+        self._is_jailed = False
 
-class Ecosystem(object):
+class PetriDish(object):
     __shared_state = {}
     def __init__(self):
-        self.__dict__ = Ecosystem.__shared_state
+        self.__dict__ = PetriDish.__shared_state
         if not hasattr(self, '_initialized'):
             self._initialize()
 
@@ -830,14 +842,14 @@ class Ecosystem(object):
         self._environments = _find_local_plugins('environments')
         self._local_environment = None
         for name, germ in self._environments.iteritems():
-            petri = germ()
+            petri = germ(None)
             if petri.is_viable():
                 print("Found viable {0} system.".format(name))
                 self._local_environment = germ
                 break
         self._initialized = True
 
-    def es(self, name=None, args=None):
+    def culture(self, name=None, args=None):
         if name is None:
             return self._local_environment(args=args)
         return self._environments[name](args=args)
