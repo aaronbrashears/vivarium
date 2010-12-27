@@ -87,7 +87,7 @@ roles:
           - action: install
             packages: [ rubygems ]
           - action: install
-            gems: [ rake ]
+            gems: [ { name: rake, version: 0.8.7 } ]
   www: |
     targets:
       apache:

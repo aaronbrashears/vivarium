@@ -791,7 +791,10 @@ class Ecosystem(object):
     @jailed
     def run(self, command):
         # print("run: {0}".format(command))
-        return subprocess.call(command)
+        env = None
+        if self._is_jailed:
+            env = {}
+        return subprocess.call(command, env=env)
 
     @jailed
     def work(self, fn, *args, **kwargs):

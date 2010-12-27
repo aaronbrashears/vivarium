@@ -122,7 +122,14 @@ class Install(Action):
 
     def _plant_gems(self, gems, ctxt):
         for gem in gems:
-            cmd = ['gem','install', gem]
+            cmd = ['gem','install']
+            if isinstance(gem, basestring):
+                cmd.append(gem)
+            else:
+                cmd.append(gem['name'])
+                if gem.has_key('version'):
+                    cmd.append('--version')
+                    cmd.append(gem['version'])
             ctxt.es.run(cmd)
 
     def _reap_gems(self, packages, ctxt):
