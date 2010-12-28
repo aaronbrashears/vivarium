@@ -2,6 +2,7 @@ from Cheetah.Template import Template
 from copy import deepcopy
 import errno
 import grp
+import netifaces
 import os.path
 import pwd
 import shutil
@@ -619,13 +620,38 @@ def plant(args):
     es = Ecosystem(args.root_dir)
     if args.root_dir != '/':
         petri = PetriDish().culture(args=args).bootstrap()
-    default_env = {'HOST' :
-                   {'FQDN': args.host,
-                    'SHORT': _shortname(args.host),
-                    'DOMAIN': _domainname(args.host),
-                    }
-                   }
+    default_env = _get_default_env(args.host)
     host.plant(es, default_env, args)
+
+def _get_default_env(host):
+    env = {'HOST' :
+               {'FQDN': host,
+                'NDQF': _big_endian_fqdn(host),
+                'SHORT': _shortname(host),
+                'DOMAIN': _domainname(host),
+                }
+           }
+    interfaces = netifaces.interfaces()
+    netinfo = {}
+    for iface in interfaces:
+        ifaceinfo = {}
+        info = netifaces.ifaddresses(iface)
+        if info.has_key(netifaces.AF_INET):
+            ifaceinfo['IPV4'] = info[netifaces.AF_INET]
+        if info.has_key(netifaces.AF_INET6):
+            ifaceinfo['IPV6'] = info[netifaces.AF_INET6]
+        if info.has_key(netifaces.AF_LINK):
+            ifaceinfo['LINK'] = info[netifaces.AF_LINK]
+        if len(ifaceinfo):
+            netinfo[iface] = ifaceinfo
+    if len(netinfo):
+        env['NET'] = netinfo
+    return env
+
+def _big_endian_fqdn(name):
+    fqdn = name.split(name)
+    fqdn.reverse()
+    return '.'.join(fqdn)
 
 def _shortname(name):
     if '.' not in name: return name
