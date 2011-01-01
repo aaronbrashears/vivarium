@@ -68,7 +68,36 @@ class Enum(set):
         raise AttributeError, "Enumeration not found: {0}".format(name)
 
 class File(object):
-    IS = Enum(['regular', 'dir', 'sym', 'hard', 'absent'])
+    IS = Enum(['regular', 'dir', 'sym', 'hard', 'absent', 'subscription'])
+
+    class Subscription(object):
+        IS = Enum(['copy', 'grinder', 'launch'])
+        def __init__(self, parent_file):
+            self._file = parent_file
+            self._type = None
+            self._from = None
+
+        def from_source(self, config, source):
+            if isinstance(config, basestring):
+                self._type = File.Subscription.IS.copy
+                self._from = config
+            else:
+                self._from = config['from']
+                if 'template' in config:
+                    self._type = File.Subscription.IS.grinder
+                    templ = source.path_to_content(config['template'])
+                    with source.open(templ) as rep_file:
+                        self._file._template = rep_file.read()
+                # *TODO: add external/launch subscription
+                else:
+                    self._type = File.Subscription.IS.copy
+            return self
+
+        def from_seed(self, seed):
+            self._type = seed['subcription']
+            self._from = seed['from']
+            self._file._template = seed.get('template', None)
+            return self
 
     def __init__(self):
         self.location = None
@@ -83,6 +112,10 @@ class File(object):
         self._target = None
         self._files = None
 
+        # Special publish and subscribe information
+        self._subscription = None
+        self._publish_to = None
+
     def from_source(self, source, filename):
         with source.open(source.path_to_file(filename)) as file_def:
             config = yaml.load(file_def.read())
@@ -95,6 +128,7 @@ class File(object):
         self.owner = seed.get('owner', None)
         self.group = seed.get('group', None)
         self.mode = seed.get('mode', None)
+        self._publish_to = seed.get('publication', None)
         if self.type == File.IS.regular:
             try:
                 self._template = seed['template']
@@ -108,6 +142,8 @@ class File(object):
                 self._files.append(File().from_seed(file_def))
         elif self.type is File.absent:
             pass
+        elif self.type == File.IS.subscription:
+            self._subscription = File.Subscription(self).from_seed(seed)
         else:
             msg = "Unkown file type: {0}"
             raise RuntimeError, msg.format(self.type)
@@ -133,6 +169,11 @@ class File(object):
             seed['files'] = []
             for node in self._files:
                 seed['files'].append(node.to_seed())
+        if self._publish_to is not None:
+            seed['publication'] = self._publish_to
+        if self._subscription is not None:
+            seed['subscription'] = self._subscription._type
+            seed['from'] = self._subscription._from
         return seed
 
     def sow(self, filename, ctxt):
@@ -231,9 +272,11 @@ class File(object):
         self.owner = config.get('owner', None)#'root')
         self.group = config.get('group', None)#'root')
         self.mode = config.get('mode', None)#'u=rw,go=r')
+        self._publish_to = config.get('publication', None)
 
         # make sure there is only 1 type.
-        markers = set(['template', 'content', 'target', 'absent', 'files'])
+        markers = set(['template', 'content', 'target',
+                       'absent', 'files', 'subscription'])
         keys = set(config.keys())
         cats = markers.intersection(keys)
         if len(cats) > 1:
@@ -264,6 +307,10 @@ class File(object):
             else:
                 self.type = File.IS.sym
             self._target = config['target']
+        elif cat == 'subscription':
+            self.type = File.IS.subscription
+            sub = File.Subscription(self)
+            self._subscription = sub.from_source(config[cat], source)
         else:
             msg = 'Unable to infer file type: {0}'
             raise RuntimeError, msg.format(location)
