@@ -259,7 +259,7 @@ class File(object):
         elif cat == 'absent':
             self.type = File.IS.absent
         elif cat == 'target':
-            if config.has_key('hard'):
+            if 'hard' in config and config['hard']:
                 self.type = File.IS.hard
             else:
                 self.type = File.IS.sym
@@ -459,7 +459,7 @@ class Host(Entity):
         for rolename, role in self.roles.iteritems():
             new_targets = role.targets(source, env)
             for key in new_targets.iterkeys():
-                if targets.has_key(key):
+                if key in targets:
                     raise TargetCollisionError, \
                         "{0} found in {1} and {2}".format(
                             key,
@@ -636,11 +636,11 @@ def _get_default_env(host):
     for iface in interfaces:
         ifaceinfo = {}
         info = netifaces.ifaddresses(iface)
-        if info.has_key(netifaces.AF_INET):
+        if netifaces.AF_INET in info:
             ifaceinfo['IPV4'] = info[netifaces.AF_INET]
-        if info.has_key(netifaces.AF_INET6):
+        if netifaces.AF_INET6 in info:
             ifaceinfo['IPV6'] = info[netifaces.AF_INET6]
-        if info.has_key(netifaces.AF_LINK):
+        if netifaces.AF_LINK in info:
             ifaceinfo['LINK'] = info[netifaces.AF_LINK]
         if len(ifaceinfo):
             netinfo[iface] = ifaceinfo
