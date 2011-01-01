@@ -2,13 +2,19 @@ import errno
 import cStringIO as stringio
 import yaml
 
+class FileNotFound(Exception):
+    pass
+
 class YamlFS(object):
     class File(object):
         def __init__(self, node, name, mode, yamlfs):
             self._name = name
             self._node = node
             if 'r' == mode:
-                self._file = stringio.StringIO(node[name])
+                try:
+                    self._file = stringio.StringIO(node[name])
+                except KeyError:
+                    raise FileNotFound
             elif 'w' == mode:
                 self._file = stringio.StringIO()
             else:
@@ -50,6 +56,7 @@ class YamlFS(object):
             else: raise
 
     def open(self, filename, mode = 'r'):
+        original_name = filename
         if filename.startswith('/'):
             filename = filename[1:]
         paths = filename.split('/')
@@ -62,7 +69,11 @@ class YamlFS(object):
         except KeyError:
             raise IOError, errno.ENOENT
         # *NOTE: split out so we can handle new files.
-        return YamlFS.File(rv, paths[-1], mode, self)
+        try:
+            return YamlFS.File(rv, paths[-1], mode, self)
+        except FileNotFound:
+            msg = "Unable to find file: {0}".format(original_name)
+            raise IOError, (errno.ENOENT, msg)
 
     def list(self, dirname):
         directory = self._descend_path(dirname)
