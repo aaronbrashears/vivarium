@@ -9,7 +9,7 @@ class Run(Action):
 
     def sow(self, ctxt):
         print("Run: sowing step {0}".format(ctxt.number))
-        if ctxt.params.has_key('command'):
+        if 'command' in ctxt.params:
             return True
         return False
 

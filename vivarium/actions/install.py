@@ -127,7 +127,7 @@ class Install(Action):
                 cmd.append(gem)
             else:
                 cmd.append(gem['name'])
-                if gem.has_key('version'):
+                if 'version' in gem:
                     cmd.append('--version')
                     cmd.append(gem['version'])
             ctxt.es.run(cmd)

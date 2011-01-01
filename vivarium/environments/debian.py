@@ -59,15 +59,15 @@ class Debian(object):
             if not os.path.isdir(root):
                 os.makedirs(root)
             cmd=['debootstrap']
-            if self.debargs.has_key('base_tarball'):
+            if 'base_tarball' in self.debargs:
                 cmd.append('--unpack-tarball')
                 cmd.append(self.debargs['base_tarball'])
-            if self.debargs.has_key('distribution'):
+            if 'distribution' in self.debargs:
                 cmd.append(self.debargs['distribution'])
             else:
                 cmd.append(platform.dist()[2])
             cmd.append(root)
-            if self.debargs.has_key('mirror'):
+            if 'mirror' in self.debargs:
                 cmd.append(self.debargs['mirror'])
             # print("Bootstrapping: {0}".format(' '.join(cmd)))
             subprocess.call(cmd)
