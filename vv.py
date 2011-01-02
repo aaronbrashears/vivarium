@@ -2,6 +2,7 @@
 
 import argparse
 import os.path
+import socket
 import sys
 import yaml
 
@@ -32,6 +33,25 @@ def _show_parsed_config(args):
         _config(args)
         return True
     return False
+
+def _env_parser(subparsers, defaults):
+    env_parser = subparsers.add_parser(
+        'env',
+        help='Show default environment.')
+    env_parser.add_argument(
+        'host',
+        nargs='?',
+        action='store',
+        default = socket.getfqdn(),
+        help='Hostname to  the seed.')
+    _add_config_option(env_parser)
+    env_parser.set_defaults(func=_env, **defaults)
+    return subparsers
+
+def _env(args):
+    if not _show_parsed_config(args):
+        from pprint import pprint
+        pprint(vivarium.get_default_env(args.host))
 
 def _seed_parser(subparsers, defaults):
     seed_parser = subparsers.add_parser(
@@ -139,6 +159,7 @@ To get usage for a particular command:
   %(prog)s {command} --help""",
         help='commands')
     subparsers = _config_parser(subparsers, defaults.get('config', {}))
+    subparsers = _env_parser(subparsers, defaults.get('env', {}))
     subparsers = _seed_parser(subparsers, defaults.get('seed', {}))
     subparsers = _copy_parser(subparsers, defaults.get('copy', {}))
     subparsers = _plant_parser(subparsers, defaults.get('plant', {}))

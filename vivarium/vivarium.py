@@ -718,10 +718,10 @@ def plant(args):
     es = Ecosystem(args.root_dir)
     if args.root_dir != '/':
         petri = PetriDish().culture(args=args).bootstrap()
-    default_env = _get_default_env(args.host)
+    default_env = get_default_env(args.host)
     host.plant(spawn, es, default_env, args)
 
-def _get_default_env(host):
+def get_default_env(host):
     env = {'HOST' :
                {'FQDN': host,
                 'NDQF': _big_endian_fqdn(host),
@@ -747,7 +747,7 @@ def _get_default_env(host):
     return env
 
 def _big_endian_fqdn(name):
-    fqdn = name.split(name)
+    fqdn = name.split('.')
     fqdn.reverse()
     return '.'.join(fqdn)
 
