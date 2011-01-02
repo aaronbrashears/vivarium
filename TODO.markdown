@@ -6,3 +6,4 @@
 * Less destructive plant -- check if there is no change and take no action
 * Store a policy during the plant operation
 * ./vv.py tend command to check/apply policy
+* Add a way to get default configuration information
