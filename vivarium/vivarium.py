@@ -94,7 +94,7 @@ class File(object):
             return self
 
         def from_seed(self, seed):
-            self._type = seed['subcription']
+            self._type = seed['subscription']
             self._from = seed['from']
             self._file._template = seed.get('template', None)
             return self
@@ -140,7 +140,7 @@ class File(object):
             self._files = []
             for file_def in seed['files']:
                 self._files.append(File().from_seed(file_def))
-        elif self.type is File.absent:
+        elif self.type is File.IS.absent:
             pass
         elif self.type == File.IS.subscription:
             self._subscription = File.Subscription(self).from_seed(seed)
@@ -181,6 +181,8 @@ class File(object):
             self._sow_regular(filename, ctxt)
         elif self.type == File.IS.dir:
             self._sow_dir(filename, ctxt)
+        elif self.type == File.IS.subscription:
+            self._sow_subscription(filename, ctxt)
 
     def plant(self, src_filename, dst_filename, ctxt):
         def _remove(name):
@@ -206,7 +208,7 @@ class File(object):
         def _inner_plant(node):
             uid, gid = node._uid_gid_owner()
             mode = node._file_mode()
-            if node.type == File.IS.regular:
+            if node.type in (File.IS.regular, File.IS.subscription):
                 _finalize_file(node.location, uid, gid, mode)
             elif node.type == File.IS.dir:
                 for vvfile in node._files:
@@ -230,15 +232,35 @@ class File(object):
             # print "copy dir: {0} {1}".format(src_fname, dst_fname))
             shutil.copytree(src_fname, dst_fname, symlinks=True)
             _inner_plant(node)
-        def _plant_file(node, src_fname, dst_fname):
+        def _plant_file(node, src_fname, dst_fname, publication):
             with open(src_fname, 'rb') as src:
                 with open(dst_fname, 'wb') as dst:
                     shutil.copyfileobj(src, dst)
+                    if publication:
+                        print "############################## COPYING TO PUBLICATION"
+                        src.seek(0)
+                        shutil.copyfileobj(src, publication)
             uid, gid = node._uid_gid_owner()
             mode = node._file_mode()
             _finalize_file(node.location, uid, gid, mode)
-        if self.type == File.IS.regular:
-            ctxt.es.work(_plant_file, self, src_filename, dst_filename)
+        if self.type in (File.IS.regular, File.IS.subscription):
+            try:
+                publication = None
+                if self._publish_to:
+                    pub = ctxt.spawn.path_to_publication(self._publish_to)
+                    print "############################## Opening ", pub
+                    publication = ctxt.spawn.open(pub, 'w')
+                path = os.path.dirname(dst_filename)
+                ctxt.es.mkdir(path)
+                ctxt.es.work(_plant_file,
+                             self,
+                             src_filename,
+                             dst_filename,
+                             publication)
+            finally:
+                if publication:
+                    print "############################## Closing ", pub
+                    publication.close()
         elif self.type == File.IS.dir:
             ctxt.es.work(_plant_dir, self, src_filename, dst_filename)
         else:
@@ -267,13 +289,36 @@ class File(object):
         for node in self._files:
             node.sow(node.location, ctxt)
 
+    def _sow_subscription(self, filename, ctxt):
+        sub = self._subscription._from
+        path = ctxt.spawn.path_to_publication(sub)
+        env = ctxt.env
+        if self._subscription._type == File.Subscription.IS.grinder:
+            if ctxt.spawn.isdir(path):
+                children = ctxt.spawn.list(path)
+                for child in children:
+                    fullpath = os.path.join(path, child)
+                    if ctxt.spawn.isfile(fullpath):
+                        new_env = yaml.load(ctxt.spawn.open(fullpath).read())
+                        env = _merge_dicts(env, {child: new_env})
+            else:
+                new_env = yaml.load(ctxt.spawn.open(path).read())
+                env = _merge_dicts(env, new_env)
+            tpl = Template(self._template, searchList=[env])
+            content = str(tpl)
+        else:
+            # copy operation so just read the contents
+            content = ctxt.spawn.open(path).read()
+        def _sub_sow():
+            with open(filename, 'w') as output:
+                output.write(content)
+        ctxt.es.work(_sub_sow)
+
     def _load_config(self, config, source, location):
         self.location = location
         self.owner = config.get('owner', None)#'root')
         self.group = config.get('group', None)#'root')
         self.mode = config.get('mode', None)#'u=rw,go=r')
-        self._publish_to = config.get('publication', None)
-
         # make sure there is only 1 type.
         markers = set(['template', 'content', 'target',
                        'absent', 'files', 'subscription'])
@@ -314,6 +359,11 @@ class File(object):
         else:
             msg = 'Unable to infer file type: {0}'
             raise RuntimeError, msg.format(location)
+        self._publish_to = config.get('publication', None)
+        if self._publish_to:
+            if self.type not in (File.IS.regular, File.IS.subscription):
+                msg = 'Can only publish regular files: {0}'
+                raise RuntimeError, msg.format(location)
         return self
 
     def _load_dir(self, config, source):
@@ -478,13 +528,13 @@ class Host(Entity):
             self.stages.append(targets)
         return self
 
-    def plant(self, es, default_env, args):
+    def plant(self, spawn, es, default_env, args):
         for count, stage in enumerate(self.stages):
             print("Stage {0}".format(count))
             print("********")
             for name, target in stage.iteritems():
                 print("Target: {0}".format(name))
-                target.plant(name, es, default_env, args)
+                target.plant(spawn, es, name, default_env, args)
 
     def _gather(self, source):
         targets = self._find_targets(source)
@@ -498,7 +548,7 @@ class Host(Entity):
         targets = {}
         env = self._config.get('env', {})
         for name, value in self._config.get('targets', {}).iteritems():
-            steps = value['steps']
+            steps = value.get('steps', [])
             depends = value.get('depends', None)
             target = Target().from_source(source, steps, depends, env)
             targets[name] = target
@@ -600,10 +650,11 @@ class Target(object):
         seed['env'] = self.env
         return seed
 
-    def plant(self, target_name, es, default_env, args):
+    def plant(self, spawn, es, target_name, default_env, args):
         contexts = []
         for num, step in enumerate(self.steps):
             context = ActionContext(
+                spawn,
                 es,
                 target_name,
                 num,
@@ -668,7 +719,7 @@ def plant(args):
     if args.root_dir != '/':
         petri = PetriDish().culture(args=args).bootstrap()
     default_env = _get_default_env(args.host)
-    host.plant(es, default_env, args)
+    host.plant(spawn, es, default_env, args)
 
 def _get_default_env(host):
     env = {'HOST' :
@@ -810,7 +861,8 @@ def _find_plugins(path):
     return plugins
 
 class ActionContext(object):
-    def __init__(self, es, target_name, num, params, data, env, args):
+    def __init__(self, spawn, es, target_name, num, params, data, env, args):
+        self.spawn = spawn
         self.es = es
         self.target_name = target_name
         self.number = num
@@ -866,7 +918,11 @@ class Ecosystem(object):
         # print("run: {0}".format(command))
         env = None
         if self._is_jailed:
-            env = {}
+            paths = ['/usr/local/sbin', '/usr/local/bin',
+                     '/usr/sbin', '/usr/bin',
+                     '/sbin', '/bin',
+                     '/usr/X11R6/bin']
+            env = { 'PATH': ':'.join(paths)}
         return subprocess.call(command, env=env)
 
     @jailed

@@ -12,7 +12,8 @@ class Humus(object):
         else:
             msg = 'Unable to determine back-end from: {0}'.format(location)
             raise RuntimeError, msg
-        sections = ['content', 'include', 'file', 'presence', 'role']
+        sections = ['content', 'include', 'file',
+                    'presence', 'role', 'publication']
         for section in sections:
             self._setattr_path_to(section)
         host_sections = ['host', 'seed']
