@@ -553,8 +553,9 @@ class Host(Entity):
 
     def plant(self, spawn, es, default_env, args):
         for count, stage in enumerate(self.stages):
-            print("Stage {0}".format(count))
-            print("********")
+            msg = "  Stage {0}  ".format(count)
+            print(msg)
+            print("*"*len(msg))
             for name, target in stage.iteritems():
                 print("Target: {0}".format(name))
                 target.plant(spawn, es, name, default_env, args)
