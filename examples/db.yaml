@@ -1,0 +1,85 @@
+---
+contents:
+  presence:
+    etc.hosts: |
+      something something dark side
+    my.presence: |
+      ipv4: ${NET.wlan0.IPV4[0].addr}
+      fqdn: ${HOST.FQDN}
+  mysql:
+    my.cnf: |
+      yadda yadda yadda
+files:
+  presence:
+    db.presence: |
+      location: /var/lib/vivarium/presence/db/${HOST.NDQF}
+      template: /presence/my.presence
+      publication: /presence/db/${HOST.NDQF}
+    # combine.db.presence: |
+    #   location: /var/vivarium/presence/db/etc.hosts
+    #   template: /presence/etc.hosts
+    #   pubsub:
+    #     from: /presence/db
+    #     to: /presence/db.etc.hosts
+    #     handler: feed
+    etc.hosts: |
+      location: /etc/hosts
+      owner: root
+      group: root
+      mode: u=rw,go=r
+      subscription:
+        from: /presence/db
+        template: /presence/etc.hosts
+  mysql:
+    my.cnf: |
+      location: /etc/mysql/my.cnf
+      template: /mysql/my.cnf
+hosts:
+  com:
+    example:
+      db:
+        master: |
+          includes: [ db.cluster ]
+          roles:
+            database:
+              env:
+                serverid: 1
+        slave: |
+          includes: [ db.cluster ]
+          roles:
+            database:
+              env:
+                serverid: 2
+            # combine: ~
+includes:
+  db.cluster: |
+    targets:
+      db.presence:
+        steps:
+          - action: install
+            files: [ /presence/db.presence ]
+      db.hosts:
+        steps:
+          - action: install
+            files: [ /presence/etc.hosts ]
+        depends: [ db.presence ]
+      db.cluster:
+        depends: [ db.presence, db.hosts ]
+publications:
+roles:
+  database: |
+    targets:
+      mysql:
+        steps:
+          - action: install
+            packages: [ mysql-client, mysql-server ]
+          - action: install
+            files: [ /mysql/my.cnf ]
+        depends: [ db.cluster ]
+  # combine: |
+  #   targets:
+  #     combine:
+  #       steps:
+  #         - action: install
+  #           files: [ /presence/combine.db.presence ]
+  #       depends: [ db.cluster ]

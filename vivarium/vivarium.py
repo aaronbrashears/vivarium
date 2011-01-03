@@ -99,6 +99,8 @@ class File(object):
             self._file._template = seed.get('template', None)
             return self
 
+    TEMPLATE_ATTRS = 'location owner group mode _publish_to'.split()
+
     def __init__(self):
         self.location = None
         self.type = None
@@ -177,6 +179,7 @@ class File(object):
         return seed
 
     def sow(self, filename, ctxt):
+        self._finalize_location(ctxt.env)
         if self.type == File.IS.regular:
             self._sow_regular(filename, ctxt)
         elif self.type == File.IS.dir:
@@ -185,6 +188,7 @@ class File(object):
             self._sow_subscription(filename, ctxt)
 
     def plant(self, src_filename, dst_filename, ctxt):
+        self._finalize_location(ctxt.env)
         def _remove(name):
             if os.path.islink(name) or os.path.isfile(name):
                 os.unlink(name)
@@ -237,7 +241,6 @@ class File(object):
                 with open(dst_fname, 'wb') as dst:
                     shutil.copyfileobj(src, dst)
                     if publication:
-                        print "############################## COPYING TO PUBLICATION"
                         src.seek(0)
                         shutil.copyfileobj(src, publication)
             uid, gid = node._uid_gid_owner()
@@ -248,7 +251,6 @@ class File(object):
                 publication = None
                 if self._publish_to:
                     pub = ctxt.spawn.path_to_publication(self._publish_to)
-                    print "############################## Opening ", pub
                     publication = ctxt.spawn.open(pub, 'w')
                 path = os.path.dirname(dst_filename)
                 ctxt.es.mkdir(path)
@@ -259,12 +261,34 @@ class File(object):
                              publication)
             finally:
                 if publication:
-                    print "############################## Closing ", pub
                     publication.close()
         elif self.type == File.IS.dir:
             ctxt.es.work(_plant_dir, self, src_filename, dst_filename)
         else:
             ctxt.es.work(_inner_plant, self)
+
+    def _finalize_location(self, env):
+        for attr in File.TEMPLATE_ATTRS:
+            attribute = getattr(self, attr, None)
+            if attribute is not None:
+                tpl = Template(attribute, searchList=[env])
+                setattr(self, attr, str(tpl))
+                print "******************** setattr:",attr,str(tpl)
+        if self.type == File.IS.subscription:
+            tpl = Template(self._subscription._from, searchList=[env])
+            self._subscription._from = str(tpl)
+        elif self.type == File.IS.dir:
+            seen = set()
+            for node in self._files:
+                depth = len(node.location.split('/'))
+                node._finalize_location(env)
+                if node.location in seen:
+                    msg = "Duplicate filename: {0}".format(node.location)
+                    raise BadFilename, msg
+                if len(node.location.split('/')) != depth:
+                    msg = "File location change: {0}".format(node.location)
+                    raise BadFilename, msg
+                seen.add(node.location)
 
     def _sow_regular(self, filename, ctxt):
         if self._content is not None:
