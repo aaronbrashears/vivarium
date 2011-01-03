@@ -273,7 +273,6 @@ class File(object):
             if attribute is not None:
                 tpl = Template(attribute, searchList=[env])
                 setattr(self, attr, str(tpl))
-                print "******************** setattr:",attr,str(tpl)
         if self.type == File.IS.subscription:
             tpl = Template(self._subscription._from, searchList=[env])
             self._subscription._from = str(tpl)
