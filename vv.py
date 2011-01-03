@@ -43,7 +43,7 @@ def _env_parser(subparsers, defaults):
         nargs='?',
         action='store',
         default = socket.getfqdn(),
-        help='Hostname to  the seed.')
+        help='Hostname. Network values come from localhost.')
     _add_config_option(env_parser)
     env_parser.set_defaults(func=_env, **defaults)
     return subparsers
